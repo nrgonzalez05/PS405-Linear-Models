@@ -1,0 +1,272 @@
+---
+title: "Answers to Problem Set 1"
+author: "Nicholas Gonzalez"
+editor: visual
+format: pdf
+---
+
+Work on with Tanner Bentley. 
+
+# Problem #1 
+
+## 1.1 
+
+Regression residuals can be defined as the difference between the observed values of the dependent variable, or DV, and the predicted values of that variable. 
+
+Regression residuals can be used to evaluate how accurate a regression model fits a given data set. 
+
+$$
+e_i = y_i - \hat{y}_i
+$$
+
+## 1.2 
+
+The population error can be defined as the difference between the estimate and the true value of a given population. 
+
+$$
+\epsilon_i = y_i - (\beta_0 + \beta_1 x_i)
+$$
+
+## 1.3 
+
+The population regression slope coefficient can be defined as the average change in _y_, the dependent variable, for everyone one unit increased in _x_, the independent variable. This can be symbolized has $\hat{\beta_1}$. 
+
+$$
+y_i = \beta_0 + \beta_1 x_i + \epsilon_i
+$$
+
+
+## 1.4 
+
+
+The estimator of the regression slope coefficient is the average change in the dependent variable, or _y_, for one unit of movement in the independent variable, _x_. This can be symbolized has $\hat{\beta}$.  
+
+$$
+\hat{\beta_1} = \frac{Cov(X, Y)}{Var(X)}
+$$
+
+
+
+# Problem 2 
+
+## 2.1
+
+
+The zero conditional mean ($\mathbb{E}[u | X] = 0 \quad \Rightarrow \quad \text{Cov}(X, u) = 0$) is the assumption that the average value of our error term, so _u_, given any specific value for the regressor _x_, would be zero. 
+
+If the zero conditional mean is unsatisfied, this means that there is some relationship with the regressor _x_ and the error term _u_. This happens if their are important variables that correlate with _x_ & _y_, but are not included in our model. This is omitted variable bias. 
+
+## 2.2.1
+
+
+```{r}
+library(readr)
+example <- read_csv("Problem_Set_1/example.csv")
+```
+ 
+
+```{r}
+
+library(modelsummary)
+
+plot(example$x, example$y, pch = 16, col = "blue",
+     main = "Plot with Regression Lines",
+     xlab = "Regressor (X)", ylab = "Outcome (Y)")
+
+abline(a = 1, b = 0.5, col = "red", lwd = 2, lty = 2)
+
+ex_model <- lm(example$y ~ example$x)
+
+modelsummary(ex_model)
+
+abline(ex_model, col = "green", lwd = 2)
+
+legend("topleft", inset = 0.01,
+       legend = c("Known Coefficients", "Fitted Line (lm)"),
+       col = c("red", "green"), lty = c(2, 1), lwd = 2,
+       cex = 0.8) 
+```
+ 
+ 
+## 2.2.2
+
+The line produced by lm() is more vertical, or has a steeper incline than the line created by the known-coefficients. The fitted line actually seems to tell a better story of the data because it lines up with the middle/center of the data more. The estimator generated via OLS is biased because there are clusters of data at the top(max) and bottom(min) of the graph.  
+ 
+## 2.3.1 
+ 
+The correlation (0.79) is significantly different from 0, suggesting that zero conditional mean assumption is violated within this data. When visually looking at the plot, we also see the assumption is violated because there is a discernible pattern where _u_ increases with _x_. The plot also seems to have heteroskedastic features as there are some clusters at both the min and max, and spread is different across both axes. The fact that _u_ increases with _x_ also suggests non-constant variance. 
+
+```{r}
+
+plot(example$x, example$u, pch = 16, col = "magenta",
+     main = "Plot of Error Term (u) against Regressor (x)",
+     xlab = "Regressor (x)", ylab = "Error Term (u)")
+
+```
+
+```{r}
+correlation <- cor(example$x, example$u)
+print(correlation)
+```
+
+
+## 2.3.2 
+
+The coefficients of these two pairs appear to be about half of one another. They also have the same standard errors.The relationship also has bias because the estimates are smaller, and the values are not centered. However, the small standard errors tell us there is not a ton of variance. 
+
+
+
+```{r}
+ex_m2 <- lm(example$u ~ example$x)
+
+m2_summary <- summary(ex_m2)
+
+intercept <- m2_summary$coefficients[1, 1] 
+slope <- m2_summary$coefficients[2, 1]      
+intercept_se <- m2_summary$coefficients[1, 2]  
+slope_se <- m2_summary$coefficients[2, 2]  
+
+# from part b
+
+ex_summary <- summary(ex_model)
+
+
+interceptB <- ex_summary$coefficients[1, 1] 
+slopeB <- ex_summary$coefficients[2, 1]      
+intercept_seB <- ex_summary$coefficients[1, 2]  
+slope_seB <- ex_summary$coefficients[2, 2]  
+
+
+cat("Intercept: ", intercept, "\n")
+cat("Coefficient on X: ", slope, "\n")
+cat("Standard error of intercept: ", intercept_se, "\n")
+cat("Standard error of coefficient on X: ", slope_se, "\n")
+
+
+cat("Intercept: ", interceptB, "\n")
+cat("Coefficient on X: ", slopeB, "\n")
+cat("Standard error of intercept: ", intercept_seB, "\n")
+cat("Standard error of coefficient on X: ", slope_seB, "\n")
+
+
+```
+
+
+## 2.3.3 
+
+The failure of the zero conditional mean assumption explains why the OLS estimate for  \beta_1  in part (b) is biased, as  X  and  u  are correlated, because _u_ increases with _x_. While a violation of the homoskedastic assumption does not bias the estimate, it could affect the reliability of the standard errors. 
+
+
+
+## 2.4
+
+
+```{r, include=FALSE}
+
+library(tidyverse)
+
+final_plot <- ggplot(example, aes(x = x, y = ex_model$residuals)) + 
+  geom_point()
+ theme_minimal() +
+  ggtitle( "Residuals Plot against IV") +
+  ylab("Residuals")
+
+
+```
+
+
+*(i am hiding the code for the plot because it kept printing background items that made the PDF very long)*
+
+
+```{r}
+
+print(final_plot)
+
+```
+
+
+## 2.4.1
+
+After generating the plot, we can tell that the data is now shifted. Therefore our same conclusions apply, however, this view of the data/graph, allows us to easier understand it is heteroskedastic. 
+
+
+
+## 2.4.2
+
+I'd tell my friend that the residuals from a regression are always uncorrelated with the predictor because OLS minimizes the sum of squared residuals. It also forces the sample covariance between the residuals and the predictor to be zero. However, this does not mean the true errors (u) are uncorrelated with X. If the zero conditional mean assumption is violated, _u_ and _x_  could still be correlated, meaning there is bias in the OLS estimates. Residuals reflect the model’s fit, not the underlying connection between _u_ and _x_.
+
+
+# Problem 3 
+
+## 3.1
+
+```{r}
+library(readr)
+nc_precincts <- read_csv("Problem_Set_1/nc_precincts.csv")
+```
+
+
+
+## 3.1.1
+
+```{r}
+model_turnout <- lm(pct_turnout_2022 ~ pct_GOP_2022, data = nc_precincts)
+
+summary(model_turnout)
+
+model_absentee <- lm(pct_absentee_vbm_2022 ~ pct_GOP_2022, data = nc_precincts)
+
+summary(model_absentee)
+
+model_early <- lm(pct_early_2022 ~ pct_GOP_2022, data = nc_precincts)
+
+summary(model_early)
+
+model_election <- lm(pct_election_day_2022 ~ pct_GOP_2022, data = nc_precincts)
+
+summary(model_election)
+```
+
+
+## 3.1.2
+
+
+```{r}
+
+library(modelsummary)
+
+model_turnout <- lm(pct_turnout_2022 ~ pct_GOP_2022, data = nc_precincts)
+model_absentee <- lm(pct_absentee_vbm_2022 ~ pct_GOP_2022, data = nc_precincts)
+model_early <- lm(pct_early_2022 ~ pct_GOP_2022, data = nc_precincts)
+model_election <- lm(pct_election_day_2022 ~ pct_GOP_2022, data = nc_precincts)
+
+model_table <- modelsummary(
+  list(model_turnout, model_absentee, model_early, model_election),
+  coef_rename = c("pct_GOP_2022" = "Coefficient on pct_GOP_2022"),  
+  output = "gt" 
+)
+
+model_table 
+
+```
+
+
+## 3.1.3
+
+
+For the model with *turnout* as a variable, for every increase in republican voters in a precinct, the total election turnout increases by .0337. The positive sign of this model tells us that precincts that are republican dense tend to have a higher turnout. 
+
+For the model with *absentee voters*, the negative sign showcases that republican leaning precincts tend to have lower absentee voting than democratic ones. The magnitude suggests a consistent negative association.
+
+The model looking at *early voting*, or voters, highlights a negative sign, meaning that precincts with higher republican support, early voting is found to be less common. The magnitude -.220 tells us that there is a negative relationship. 
+
+The fourth model looking at *election day voting* has a positive coefficient of 0.272. This suggest that as the amount of republicans in a precinct increases, the percent of people who vote on election day also increases. The magnitude tells us that this relationship is moderately positive. 
+
+
+## 3.1.4
+
+Regarding _R^2_, for the social sciences, their is a rather robust, or strong _R^2_ for our first model, but less so for the others. But in general none of our R^2 explains a great majority of the voters, as they are all >0.5, with the two of the 4 models being less than >.1. The model fails to capture other aspects of behavior that may influence these types of voting. In example, civic knowledge, income level, or even race. 
+
+
+
+

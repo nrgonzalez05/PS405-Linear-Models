@@ -1,0 +1,62 @@
+---
+title: "Problem set template"
+author: "Nicole Wilson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+When you first open this document, change the title and author. The date is set to update automatically, but you can also put in a specific date. Many people work on their document using the html output but then switch to PDF at the end, but you can also start in PDF. You can change the output above to pdf_document or use the dropdown menu next to the Knit button in RStudio. 
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+
+For your reference, here are some examples of how to generate the notation you may need (non-exhaustive): 
+$y_i$
+$\beta_0$
+$\hat{\beta}_1$
+$\hat{u}_i$
+$u$
+
+You can also enter a whole equation either in-line, like this -- $y_i = \beta_0 + \beta_1x_i + u_i$ or as a stand-alone: 
+
+$$
+y_i = \hat{\beta}_0 + \hat{\beta}_1x_i + \hat{u}_i
+$$
+
+### (a)
+Regression residuals:
+
+### (b)
+The population error: 
+
+### (c)
+The population regression slope coefficient: 
+
+### (d)
+The estimator of the regression slope coefficient:
+
+
+## Problem 2
+
+### (a)
+The zero conditional mean assumption... 
+
+### (b)
+
+```{r problem1b}
+## make sure you have downloaded the data, ideally to the same place where you are working on your pset solutions 
+
+ex <- read.csv("example.csv")
+
+## add plot of x and y here. you can use either base R or ggplot.
+## include two lines: one with your regression output and the other with the true population regression coefficients 
+## make sure to include a legend
+```
+
+## Problem 3
+
+

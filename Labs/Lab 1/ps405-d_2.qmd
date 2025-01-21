@@ -1,0 +1,447 @@
+---
+title: "Simple Linear Regression"
+subtitle: "Week 2"
+date: 2025-01-16
+format: 
+  html:
+    embed-resources: true
+toc: true
+---
+
+# Before we start
+
+-   Download the data
+
+-   Organize your directory
+
+<center>
+<a href="https://artur-baranov.github.io/nu-ps405-ds/scripts/ps405-d_2.qmd" class="btn btn-primary" role="button" download="ps405-d_2.qmd" style="width:200px" target="_blank">Download script</a>
+</center>
+<br>
+<center>
+<a href="https://artur-baranov.github.io/nu-ps405-ds/data/WHR.csv" class="btn btn-primary" role="button" download="WHR.csv" style="width:200px" target="_blank">Download data</a>
+</center>
+
+
+# Review of the Previous Session
+
+Let's refresh what we did last week. 
+
+::: callout-note
+## Review
+
+First, load the `tidyverse` library
+
+```{r}
+#| message: false
+
+library(tidyverse)
+```
+
+Then, load the V-Dem data
+
+```{r}
+#| eval: false
+
+load(url("https://github.com/vdeminstitute/vdemdata/raw/6bee8e170578fe8ccdc1414ae239c5e870996bc0/data/vdem.RData"))
+```
+
+
+You are interested in corruption in various geographical regions. Select year (`year`), region (`e_regionpol_7C`) and corruption (`v2x_corr`) variables from the `vdem` dataset.
+
+```{r}
+#| eval: false
+
+corruption_data =  %>%
+  ...(year, ..., v2x_corr) 
+```
+
+
+As we are working with the V-Dem data, let's rename variables so it's more straightforward.
+
+```{r}
+#| eval: false
+
+corruption_data = corruption_data ...
+  ...(region = e_regionpol_7C,
+      corruption = ...)
+```
+
+Calculate the average of the `corruption` variable. Don't forget about the `na.rm = TURE` argument!
+
+```{r}
+#| eval: false
+
+...
+```
+
+Using `group_by()` and `summarize()` calculate the average corruption for all regions in the dataset.
+
+```{r}
+#| eval: false
+
+corruption_data ...
+  (...) %>%
+  ...(average = ...(..., na.rm = T))
+```
+
+Lastly, let's see the distributions of corruption across regions. Draw a boxplot below with `region` variable on the X axis, and `corruption` variable on the Y axis.
+
+```{r}
+#| eval: false
+
+ggplot(data = corruption_data) +
+  ...(aes(x = ..., y = ...))
+```
+
+Something is wrong, right? We haven't checked the classes of the variables, and apparently the `region` variable has to be changed. Let's check it's class first.
+
+```{r}
+#| eval: false
+
+...(corruption_data$...)
+```
+
+What class should it be? Let's recode it directly on the plot.
+
+```{r}
+#| eval: false
+
+...(...) +
+  geom_boxplot(aes(x = ...(region), y = ...))
+```
+
+:::
+
+# Agenda for Today
+
+-   Clearing the environment
+
+-   Loading CSV data to R
+
+-   Building a simple OLS regression
+
+
+# Simple Linear Regression
+
+First of all, don't forget to download the data! Today we are working with the World Happiness Report. For loading the dataset in R, `getwd()` and `setwd()` can be helpful. The [codebook](https://happiness-report.s3.amazonaws.com/2024/Ch2+Appendix.pdf) is here to help us.
+
+-   `Country_name` is the name of the country
+
+-   `Ladder_score` is the happiness score
+
+-   `Logged_GDP_per_capita` is the log of GDP per capita
+
+-   `Social_support` is an index that measures the extent to which an individual has someone to rely on in times of trouble.
+
+-   `Healthy_life_expectancy` is the expected age of healthy living.
+
+And many others.
+
+```{r}
+whr = read.csv("data/WHR.csv")
+```
+
+Explore what we have in the dataset by accessing the column names
+
+```{r}
+colnames(whr)
+```
+
+First, let's draw a histogram for `Ladder_score` variable.
+
+```{r}
+#| message: false
+
+ggplot(whr) +
+  geom_histogram(aes(x = Ladder_score)) +
+  labs(x = "Happiness Score") +
+  scale_y_continuous(breaks = c(0:10)) +
+  theme_classic()
+```
+
+Now, let's plot happiness scores (`Ladder_score`) against `Social_support`. What can we see?
+
+```{r}
+ggplot(whr) +
+  geom_point(aes(x = Social_support, y = Ladder_score))
+```
+
+## Model Building
+
+Let's run a simple model, and then check it's summary.
+
+```{r}
+#| warning: false
+
+basic_model = lm(Ladder_score ~ Social_support, whr)
+  
+summary(basic_model)
+```
+
+A one unit increase in Social Support is associated with a 7.4 increase in the happiness score. What is the maximum value the Happiness Score can take?
+
+```{r}
+max(whr$Ladder_score)
+```
+
+And now, let's draw a histogram of the Social Support. So, how much does this model tell us?
+
+```{r}
+#| eval: false 
+
+ggplot(whr) +
+  ...(aes(x = Social_support))
+```
+Let's correct the `Social_support` variable a bit, transforming it to 0-100 scale. What do you think about the model now? What do you think about $R^2$?
+
+```{r}
+whr = whr %>%
+  mutate(Social_support_percentage = Social_support * 100)
+
+adjusted_model = lm(Ladder_score ~ Social_support_percentage, whr)
+  
+summary(adjusted_model)
+```
+
+Let's write this regression formula out. Do you remember the general form?
+
+$$
+Y = \beta_0 + \beta_1X_1+\epsilon
+$$
+
+In our case, this can be presented as
+
+$$
+\text{Happines} = -0.34 + 0.07\text{ Social Support} + e
+$$
+
+Alternatively,
+
+$$
+Y = -0.34+0.07x+u
+$$
+
+Now, visualize the regression.
+
+```{r}
+#| message: false
+
+ggplot(whr, aes(x = Social_support_percentage, y = Ladder_score)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(x = "Social Support (%)",
+       y = "Happiness Score")
+```
+
+## Diagnostics
+
+Let's analyze the regression. First, extract the residuals and plot their distribution. Does it follow $N(0, \sigma^2)$?
+
+```{r}
+#| warning: false
+
+res = adjusted_model$residuals
+
+ggplot() +
+  geom_histogram(aes(x = res), bins = 20) +
+  geom_vline(xintercept = mean(res), color = "red", size = 1.5)
+```
+
+Now we need to check the constant variance assumption. Does it hold? What term is used to describe this satisfied assumption?
+
+```{r}
+yhat = adjusted_model$fitted.values
+
+ggplot() +
+  geom_point(aes(x = yhat, y = res)) +
+  geom_hline(yintercept = 0, color = "blue") +
+  labs(title = "Residuals vs fitted values plot")
+```
+
+Explore different patterns below
+
+![](https://miro.medium.com/v2/resize:fit:1132/1*USShA7fTcjs_hSxwcTFmVw.png)
+
+# Reporting Regression
+
+This is a brief reminder on how you can present the regression output.
+
+First, let's load the library `modelsummary`.
+
+```{r}
+#| message: false
+#| warning: false
+
+library(modelsummary)
+```
+
+Now, simply run the chunk below. Note the syntax. Let's spend some time analyzing what's going on. Compare it with `summary()`.
+
+```{r}
+summary(basic_model)
+modelsummary(basic_model)
+```
+
+We can present several models easily.
+
+```{r}
+modelsummary(list(basic_model, adjusted_model))
+```
+
+
+Ok, there is a lot of things going on. Let's customize the output so it presents only relevant information. Once again, pay attention to the syntax and the arguments. 
+
+-   `coef_rename` renames the $\beta$ coefficient names
+
+-   `gof_omit` removes statistics, note that if you want to remove multiple statistics you should use `|`
+
+-   `stars = TRUE` indicates p-values stars
+
+```{r}
+modelsummary(list("Basic model" = basic_model, 
+                  "Adjusted model" = adjusted_model),
+             coef_rename = c("Intercept", 
+                             "Social Support", 
+                             "Social Support (%)"),
+             gof_omit = "BIC|AIC|RMSE|Log.Lik.",    
+             stars = TRUE) 
+```
+
+
+# Exercises
+
+
+Now we are working with healthy lifestyle (`Healthy_life_expectancy`) in the `whr` dataset. First, draw a histogram. What is the variable's scale?
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+```{r}
+#| eval: false
+
+...
+```
+
+:::
+
+
+Using `geom_vline()` add an average for `Healthy_life_expectancy` to the plot. 
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+```{r}
+
+```
+
+:::
+
+
+Insert a chunk below and build an `lm()` model where dependent variable is Happiness score (`Ladder_score`) and Independent variable is `Healthy_life_expectancy`. Present the summary.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Interpret coefficients and $R^2$.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Using $\LaTeX$ write out the regression function below.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+$$
+\text{Happiness Score} = ...
+$$
+
+:::
+
+Using `ggplot()` visualize plot Happiness score (`Ladder_score`) against `Healthy_life_expectancy`. Add a regression line.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+```{r}
+#| eval: false
+
+ggplot(...) +
+  geom_...() +
+  geom_smooth()
+```
+
+:::
+
+Extract the residuals from the model and plot their distribution.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Name X and Y axes. Title the plot. Add a `theme_bw()` to the plot.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Are residuals distributed approximately normally?
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Draw residuals vs fitted plot. Is the data homoscedastic or heteroscedastic? Why?
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Using `modelsummary()` present the regression output. Don't forget to customize it.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+
+
+
+# Check List
+
+<input type="checkbox"/> I know that wrong class of a variable can hinder statistical models and visualizations
+
+<input type="checkbox"/> I know how directories work and how to load data in R
+
+<input type="checkbox"/> I know how to calculate and visualize a simple regression
+
+<input type="checkbox"/> I know that I can adjust the scales of the variable to ease the interpretation
+
+<input type="checkbox"/> I know how access residuals of the model for the further diagnostics
