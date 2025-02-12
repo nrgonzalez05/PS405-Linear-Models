@@ -1,0 +1,489 @@
+---
+title: "Multiple Linear Regression"
+subtitle: "Week 3"
+date: 2025-01-23
+format: 
+  html:
+    embed-resources: true
+toc: true
+---
+
+# Before we start
+
+-   Congrats with submitting the first HW! How are you feeling?
+
+-   The discussion section structure (review, comments about HW, new material and exercises). I would be happy to hear your feedback after the classes or via email.
+
+<center>
+<a href="https://artur-baranov.github.io/nu-ps405-ds/scripts/ps405-d_3.qmd" class="btn btn-primary" role="button" download="ps405-d_3.qmd" style="width:200px" target="_blank">Download script</a>
+</center>
+<br>
+<center>
+<a href="https://artur-baranov.github.io/nu-ps405-ds/data/WhoGov.csv" class="btn btn-primary" role="button" download="WhoGov.csv" style="width:200px" target="_blank">Download data</a>
+</center>
+
+
+# Review of the previous week
+
+::: callout-note
+## Review
+
+Load the `tidyverse` and `modelsummary` libraries
+
+```{r}
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(modelsummary)
+```
+
+Load the World Happiness Report data (`whr.csv`)
+
+```{r}
+whr = read.csv("data/WHR.csv")
+```
+
+Using `ggplot()`, draw a histogram of `Logged_GDP_per_capita` variable. Add a `geom_vline()` to indicate an average
+
+
+
+Build a linear model, where Happiness Score (`Ladder_score`) is a dependent variable, and `Logged_GDP_per_capita` is independent variable
+
+
+
+Create a scatterplot using `ggplot()` and `geom_point()`, with `Logged_GDP_per_capita` on the X-axis and `Ladder_score` on the Y-axis. Add a linear regression line to the plot (`geom_smooth()`). Don't forget to give it a title and label the axes.
+
+
+
+Present the regression output
+
+```{r}
+#| eval: false
+
+modelsummary(list("Model" = ...),
+             ... = c("Intercept", 
+                     "GDP per capita (log)"),
+             ... = "BIC|AIC|RMSE|Log.Lik.",    
+             stars = TRUE) 
+```
+
+
+:::
+
+# Agenda for Today
+
+-   Using dummy variables in the OLS
+
+-   Introducing fixed effects and interactions
+
+-   Discussing polynomials
+
+-   A brief note on joins
+
+
+# Dummy Variables
+
+Quite often we deal with binary or dummy variables in statistics. Those can take the following shape:
+
+```{r}
+data.frame(
+  Percentage = c(35, 32, 21, 12),
+  Green_Party = c(1, 0, 0, 0),
+  Socialist_Party = c(0, 1, 0, 0),
+  Conservative_Party = c(0, 0, 1, 0)
+)
+```
+
+However, more frequently, we work with representations like the one shown below:
+
+```{r}
+data.frame(
+  Percentage = c(35, 32, 21, 12),
+  Parties = c("Green Party", "Socialist Party", "Conservative Party", "Other Parties")
+)
+```
+
+
+What is the class of such data in R?
+
+## Dummy variables and OLS regression
+
+Today we are working with WhoGov dataset. As usual, I recomment taking a look at their [codebook](https://politicscentre.nuffield.ox.ac.uk/media/4117/whogov_codebook.pdf).
+
+```{r}
+whogov = read.csv("data/WhoGov.csv")
+```
+
+First of all, these are the following variables we are going to work with today:
+
+-   `country_name` is a country name
+
+-   `n_individuals` number of unique persons in the cabinet
+
+-   `leaderexperience_continuous` the number of years the person has been leader of the country in total.
+
+-   `leader_party` party of the leader
+
+Start with exploring the distribution of number of unique persons in the cabinet (`n_individuals`)
+
+```{r}
+#| message: false
+
+ggplot(whogov) +
+  geom_histogram(aes(x = n_individuals)) 
+```
+
+Present the descriptive statistics of `n_individuals` variable.
+
+```{r}
+#| eval: false
+
+...
+```
+
+
+Let’s examine whether a country's leader being independent from a political party is associated with having more or fewer members in their cabinet. First, let's create a dummy variable indicating if a leader is independent or non-independent. You can use 1 or 0 instead, but to make it more readable here we stick to more transparent labels.
+
+```{r}
+whogov = whogov %>%
+  mutate(indep = ifelse(leader_party == "independent", "Independent", "Non-independent"))
+```
+
+Now, build a simple model and explore the effect. On average, being a non-independent (i.e. partisan) leader is associated with having 2.28 more members in their cabinet compared to independent leaders.
+
+```{r}
+lm(n_individuals ~ indep, whogov) %>%
+  summary()
+```
+
+What if we want to know the effect relative to Non-independent leader? Let's `relevel()` the variable!
+
+```{r}
+#| eval: false
+
+whogov$indep = relevel(whogov$indep, ref = "Non-independent")
+```
+
+Oops! This is why classes of data are important. Fix it!
+
+```{r}
+whogov$indep = as.factor(whogov$indep)
+```
+
+Now we can relevel the variable
+
+```{r}
+whogov$indep = relevel(whogov$indep, ref = "Non-independent")
+```
+
+Compare the models. Does the result sound reasonable? Pretty much. This is simply an inverse. But things get way more interesting if a categorical variable has more than 2 levels. You will see this later on. 
+
+```{r}
+lm(n_individuals ~ indep, whogov) %>%
+  summary()
+```
+
+
+## Fixed Effects
+
+Let's explore how leader's tenure is associated with the number of individuals in the government. We start with the simple linear regression. Take a moment to interpret the result and $R^2$.
+
+```{r}
+lm(n_individuals ~ leaderexperience_continuous, whogov) %>%
+  summary()
+```
+
+Take a moment and draw a scatterplot for `n_individuals` and `leaderexperience_continuous`. Add a regression line to the plot.
+
+```{r}
+#| eval: false
+
+...
+```
+
+Now, let's add a categorical variable, `indep`, to the model. By doing so, we assume that the association between the leader's tenure and the number of individuals in the government differs depending on whether the leader is independent or partisan. 
+
+Practically, this could be done in multiple ways. First, let's discuss introduction of **fixed effects** to our model. Moreover, this is a **Multiple linear regression**!
+
+```{r}
+model_fe = lm(n_individuals ~ leaderexperience_continuous + indep, whogov) 
+summary(model_fe)
+```
+
+We will use `ggeffects` library for visualization of regression with the fixed effects. This is sort of an addition to `ggplot2` library from `tidyverse`. Don't forget to install it using `install.packages()`!
+
+```{r}
+#| warning: false
+
+library(ggeffects)
+```
+
+Then, visualize the result. What can we see?
+
+```{r}
+ggpredict(model_fe, terms = c("leaderexperience_continuous", "indep")) %>%
+  plot()
+```
+
+Let's customize the plot. It should be relatively straightforward given we know `ggplot` functions. Details for the customization of `plot()` function can be found on [ggeffects](https://strengejacke.github.io/ggeffects/reference/plot.html) website.
+
+```{r}
+ggpredict(model_fe, terms= c("leaderexperience_continuous", "indep")) %>%
+  plot(show_ci = F) +
+  labs(title = "Fixed Effects Regression",
+       x = "Tenure of a Leader",
+       y = "Number of Individuals in a Cabinet",
+       color = "Leader's Status") +
+  theme_bw()
+```
+
+Some common fixed effects include:
+
+-   Country/Region/State
+
+-   Individual leaders/Parties
+
+-   Year/Time
+
+-   Policy presence or absence
+
+By introducing fixed effects, we are able to control for unobserved confounders that vary across the units (not within!). 
+
+## Interactions
+
+Often dummy variables are used to introduce an interaction term in the model. We will explore the association between `Perceptions_of_corruption` and number of people in the cabinet (`n_individuals`) depending on the independence of the party leader.
+
+The task isn't trivial as now we planning to use data from two datasets, Let's subset those. 
+
+```{r}
+whr_subset = whr %>%
+  select(Country_name, Perceptions_of_corruption)
+
+whogov_subset = whogov %>%
+  filter(year == 2021) %>%
+  select(country_name, n_individuals, indep)
+```
+
+Now, we are merging them. It's not easy to understand what's going on, but here is a great resource on [joins](https://thomasadventure.blog/posts/r-merging-datasets/) (check "the {dplyr} way")!
+
+```{r}
+whr_whogov = whr_subset %>%
+  left_join(whogov_subset, by = c("Country_name" = "country_name")) 
+```
+
+Check the result
+
+```{r}
+head(whr_whogov)
+```
+
+Now, to interact variables we need to use asterisk `*`, i.e. multiplication. 
+
+```{r}
+model_in = lm(Perceptions_of_corruption ~ n_individuals * indep, whr_whogov)
+summary(model_in)
+```
+
+Let's plot the result. Try to change `show_ci` to `TRUE`. Does it explain the p-value now?
+
+```{r}
+ggpredict(model_in, terms= c("n_individuals", "indep")) %>%
+  plot(show_ci = FALSE) +
+  labs(title = "Regression with Interaction Term",
+       x = "Number of Individuals in a Cabinet",
+       y = "Perception of Corruption",
+       color = "Leader's Status") +
+  theme_bw()
+```
+
+# IV Transformations
+
+One of the assumptions for OLS is that there is a linear relationship between the dependent and independent variables. However, this quite often not the case. Let's reverse the correction made in World Happiness report data. See below. Does it look linear?
+
+```{r}
+ggplot(whr) +
+  geom_point(aes(x = exp(Logged_GDP_per_capita), y = Ladder_score)) +
+  labs(x = "GDP per capita")
+```
+
+It doesn't. It's hard to describe this relationship in a linear manner. Natural log would explain this better, right?
+
+```{r}
+ggplot(whr) +
+  geom_point(aes(x = exp(Logged_GDP_per_capita), y = Ladder_score)) +
+  geom_function(fun = function(x){log(x) - 4}) +
+  labs(x = "GDP per capita")
+```
+
+This is why we use the natural logarithm to transform GDP per capita. The transformation reveals a linear relationship between the two variables, allowing us to capture non-linear patterns in a linear format when using OLS regression. Another commonly used transformation is quadratic ($x^2$), which serves the same purpose of addressing non-linear relationships. We call latter ones **polynomial terms**.
+
+```{r}
+ggplot(whr, aes(x = Logged_GDP_per_capita, y = Ladder_score)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+
+# Exercises
+
+Extract the following variables from the `whr` dataset: `Country_name`, `Ladder_score`, and `Continent`
+
+::: {.callout-tip icon="false"}
+## Solution
+
+```{r}
+#| eval: false
+
+whr_sub = ... 
+```
+
+:::
+
+Prepare to subset the `whogov` dataset. Leave only year 2020.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+```{r}
+#| eval: false
+
+whogov_sub = ...
+```
+
+:::
+
+Now, extract the following variables from the `whogov_sub` dataset: `country_name`, `n_individuals`, `system_category`
+
+::: {.callout-tip icon="false"}
+## Solution
+
+```{r}
+#| eval: false
+
+whogov_sub = whogov_sub %>%
+  ...(country_name, n_individuals, system_category)
+```
+
+:::
+
+Using `left_join()` merge `whr_sub` and `whogov_sub`. Don't forget to specify `by` argument. You can take a look on how we did it in above!
+
+::: {.callout-tip icon="false"}
+## Solution
+
+```{r}
+#| eval: false
+
+whr_whogov = whr_sub %>%
+  ...(..., by = c(...))
+```
+
+:::
+
+Explore which political regime (`system_category`) is associated with more happiness (`Ladder_score`). Name the political regime that is associated with the most happiness.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+However, we know that those coefficients are calculated relative to the reference category. We didn't specify it, so we have no idea against which regime we are comparing the result. Thus, to gain control back, relevel `system_category` so that the reference category is `Mixed democratic`. Don't forget to transform the variable to factor! 
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Run the regression again. Coefficients did change. But did the regime that is associated with the most happiness change?
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Now, run the model explaining the happiness (`Ladder_score`) by number of individuals in the cabinet (`n_individuals`). Interpret the results.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Introduce the categorical variable `Continent` into this model. What do we call it when we introduce categorical variables into the model? How did it change the effect of `n_individuals` variable? Why?
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+
+Create a new subset, leaving only the following continents (`Continent`): Europe (`Europe`) and North America (`North America`)
+
+
+::: {.callout-tip icon="false"}
+## Solution
+
+```{r}
+#| eval: false
+
+whr_whogov_euna = whr_whogov %>%
+  ...(Continent %in% c(..., ...))
+```
+
+:::
+
+Create a model, interacting `n_individuals` and `Continent`. Plot the results using `ggpredict()` and `plot()`. Interpret the result.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+```{r}
+#| eval: false
+
+lm(Ladder_score ~ ... * ..., whr_whogov_useu) ...
+  ggpredict(...) %>%
+  ...(show_ci = FALSE)
+```
+
+:::
+
+
+Now, change `show_ci` to `TRUE`. Visualize the results again. Are they meaningful? Why can it be the case?
+
+::: {.callout-tip icon="false"}
+## Solution
+
+```{r}
+#| eval: false
+
+...
+```
+
+:::
+
+
+# Check List
+
+<input type="checkbox"/> I know that wrong class of a variable can hinder statistical models and visualizations
+
+<input type="checkbox"/> I know how dummy variables can look like
+
+<input type="checkbox"/> I know how to relevel a categorical variable
+
+<input type="checkbox"/> I know how introduce fixed effects into the model (and I know that I should make it `as.factor()`!)
+
+<input type="checkbox"/> I know how to introduce interaction effects into the model
+
+<input type="checkbox"/> I know how to customize `ggeffects()` plots
+
+<input type="checkbox"/> I know how to introduce polynomials to OLS regression

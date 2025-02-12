@@ -1,0 +1,583 @@
+---
+title: "Presenting Results of Regression"
+subtitle: "Week 5"
+date: 2025-02-06
+format: 
+  html:
+    embed-resources: true
+toc: true
+---
+
+# Before we start
+
+-   Any questions?
+
+<center>
+<a href="https://artur-baranov.github.io/nu-ps405-ds/scripts/ps405-d_5.qmd" class="btn btn-primary" role="button" download="ps405-d_5.qmd" style="width:200px" target="_blank">Download script</a>
+</center>
+<br>
+<center>
+<a href="https://artur-baranov.github.io/nu-ps405-ds/data/sipri.csv" class="btn btn-primary" role="button" download="sipri.csv" style="width:200px" target="_blank">Download data</a>
+</center>
+
+
+# Review of the previous week
+
+::: callout-note
+## Review
+
+Start with loading the `tidyverse` library and the Who Governs data.
+
+```{r}
+#| message: false
+library(tidyverse)
+
+whogov = read.csv("data/WhoGov.csv")
+```
+
+Calculate confidence intervals of `n_total` for each `system_category`.
+
+```{r}
+
+```
+
+Visualize the calculated confidence intervals.
+
+```{r}
+
+```
+
+Set up a linear model. Regress `n_total` against `system_category`.
+
+```{r}
+
+```
+
+Using `ggeffects` library, plot the predicted values of the model.
+
+```{r}
+
+```
+
+
+:::
+
+# Review of the homework
+
+The `ggeffects` library is incredibly helpful! And quite simple. You can use it for plotting the categorical data. One thing to note, make sure it's a `factor()`! Check it out below.
+
+```{r}
+#| warning: false
+
+library(ggeffects)
+
+int = lm(alertness ~ coffee * time, data = coffee_data)
+
+ggpredict(int, terms = c("time", "coffee")) %>%
+  plot(connect_lines = TRUE) 
+```
+
+# Agenda
+
+-   Discuss libraries in development. Some cutting-edge packages are not as straightforward to install!
+
+-   Practice joins
+
+-   Discuss how to present the regressions results and ease the interpretation of complex models
+
+
+# Devtools in R
+
+Sometimes, it is helpful to utilize versions of packages that are under development. Those are impossible to install directly, but you can download them frob GitHub. To simplify this process, you need special package called `devtools`.
+
+```{r}
+#| eval: false
+
+install.packages("devtools")
+```
+
+Now, install the `vdemdata` library. This way we'll be able to load the most current V-Dem dataset directly to the R.
+
+```{r}
+#| eval: false
+
+devtools::install_github("vdeminstitute/vdemdata")
+```
+
+Let's test it. We see the dataset is here! But for the future, this is the way to install packages that are not released yet.
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(vdemdata)
+vdem %>%
+  select(country_name, year, histname, v2x_polyarchy) %>%
+  head()
+```
+
+
+# Merging Datasets and Exploring the Data
+
+We are working with [SIPRI Arms Transfers Database](https://www.sipri.org/databases/armstransfers). It contains information on all transfers of major conventional arms. The variables are: 
+
+-   `Recipient` of arms
+
+-   `Year` of the transfer
+
+-   `Import` of arms
+
+-   `Regime` a V-Dem variable for political regime
+
+```{r}
+sipri = read.csv("data/sipri.csv")
+```
+
+Now, subset some variables from V-Dem. We are choosing the following variables:
+
+-   `country_name` 
+
+-   `year` of the coded data
+
+-   `e_gdp` GDP of a country
+
+-   `e_miinteco` Armed conflict, international
+
+-   `e_miinterc` Armed conflict, internal 
+
+```{r}
+vdem_variables = vdem %>%
+  select(country_name, year, e_gdp, e_miinteco, e_miinterc)
+```
+
+Note the syntax below. We are joining two dataframes by two variables: `Recipient` and `Year`, but in the V-Dem data those have different name or spelling. 
+
+```{r}
+sipri_vdem = sipri %>%
+  left_join(vdem_variables, by = c("Recipient" = "country_name", 
+                                   "Year" = "year"))
+
+head(sipri_vdem)
+```
+
+For our convenience, rename the variables in the newly created dataframe.
+
+```{r}
+sipri_vdem = sipri_vdem %>%
+  rename(GDP = e_gdp,
+         International_conflict = e_miinteco,
+         Internal_conflict = e_miinterc)
+
+head(sipri_vdem)
+```
+
+Explore the `GDP` variable. Does it need a transformation?
+
+```{r}
+#| warning: false
+
+ggplot(sipri_vdem) +
+  geom_histogram(aes(x = GDP))
+```
+
+It might be the case. But to double-check our assumption, let's draw a boxplot. Take the `log()` of GDP directly in the plot. Did it get better?
+
+```{r}
+ggplot(sipri_vdem) +
+  geom_boxplot(aes(y = GDP))
+```
+
+Therefore, let's create a new variable `Log_GDP`.
+
+```{r}
+sipri_vdem = sipri_vdem %>%
+  mutate(Log_GDP = log(GDP))
+```
+
+To explore multiple variables at once, it is useful to plot them in `pairs` plot. There's a library `GGally` which is based on `ggplot2`, and it's quite straightforward. Be careful with the wrong class identification! Can you notice anything?
+
+```{r}
+#| warning: false
+#| message: false
+
+library(GGally)
+
+sipri_vdem %>%
+  ggpairs(columns = c("Import", "Regime", "Log_GDP", "International_conflict", "Internal_conflict"))
+```
+
+Don't forget to fix the classes of the variables!
+
+```{r}
+sipri_vdem$International_conflict = as.factor(sipri_vdem$International_conflict)
+sipri_vdem$Regime = as.factor(sipri_vdem$Regime)
+```
+
+
+# Model Building 
+
+Let's set up a basic model. We are interested in explaining the `Import` of arms. Is it related to the economic capacity of the state? We can use proxy `Log_GDP`. We can interpret and plot it quite easily, right? But does the intercept make sense?
+
+```{r}
+model_basic = lm(Import ~ Log_GDP, sipri_vdem)
+summary(model_basic)
+```
+
+However, simple models are rare to see in academic articles. Let's run a Multiple Linear Regression with fixed effects. Add `International_conflict` and `Regime` to the model. You can interpret these coefficients easily, too.
+
+```{r}
+model_fe = lm(Import ~ Log_GDP + International_conflict + Regime, sipri_vdem)
+summary(model_fe)
+```
+
+To convey a better idea what's going on, you can plot these three independent variables. But what if there are more?
+
+```{r}
+#| warning: false
+library(ggeffects)
+
+ggpredict(model_fe, terms = c("Log_GDP", "International_conflict", "Regime")) %>%
+  plot()
+```
+
+Finally, let's set up another model. This time with an interaction effect. 
+
+```{r}
+model_int = lm(Import ~ Log_GDP * International_conflict + Regime, sipri_vdem)
+summary(model_int)
+```
+
+Again, to get a better idea what's going on, you can plot the three independent variables against the dependent variable. But the limitation remains the same, it's hard to include more variables into the graph.
+
+```{r}
+#| warning: false
+
+ggpredict(model_int, terms = c("Log_GDP", "International_conflict", "Regime")) %>%
+  plot() 
+```
+
+
+# Presentation of Results
+
+## Tables
+
+The most common way to present the resutls of the regression is in tables. We have practiced it over the last two quarters. By now, the expectation is you know how to present models in a "publishable" way. For details and examples see [details](https://modelsummary.com/vignettes/modelsummary.html). 
+
+Don't forget to:
+
+-   Include p-values and $\alpha$ (critical values for stars display)!
+
+-   Include standad errors or confidence intervals for $\beta$
+
+-   If you have a categorical variable, mention the reference category
+
+-   $R^2$ for simple linear regression and $R^2_a$ for multiple linear regression
+
+-   Include number of observations
+
+Add the following argument: `output = "table.html"`.
+
+```{r}
+#| warning: false
+
+library(modelsummary)
+publishable_table = modelsummary(list("Base model" = model_basic,
+                    "Fixed Effects model" = model_fe,
+                    "Interaction model" = model_int),
+                   title = "Arms Import Models",  
+                   stars = TRUE,
+                   gof_omit = "AIC|BIC|Log.Lik|F|RMSE",
+                   coef_rename = c("(Intercept)", 
+                             "Log GDP", 
+                             "International Conflict", 
+                             "Regime: Democratic",
+                             "Regime: Electoral Authoritarian",
+                             "Regime: Minimally Democratic",
+                             "Log GDP × International Conflict"),
+                   notes = "Regime reference category: Autocratic")
+
+publishable_table
+```
+
+
+The more complex the model, the harder it is to interpret the results. Let's write out our models. You can often see these in articles. By plugging the coefficients we or our readers can calculate the predicted value for any GDP value, regime type and presence or absence of international conflict. 
+
+The basic model is easy, right?
+
+$$
+\text{Arms Import} = \beta_0 + \beta_1(\text{LogGDP}) 
+$$
+Now, fixed effects. It gets slightly trickier.
+
+$$
+\text{Arms Import} = \beta_0 + \beta_1(\text{LogGDP}) + \beta_2(\text{International Conflict}) + \beta_3(\text{Regime}) 
+$$
+
+And finally, interaction model. You can try to interpret the interaction, but we need to know the reference categories. Which is a bit of a hustle.
+
+$$
+\text{Arms Import} = \beta_0 + \beta_1(\text{LogGDP}) + \beta_2(\text{International Conflict}) + \beta_3(\text{Regime}) + \beta_4(\text{LogGDP} \times \text{International Conflict})
+$$
+
+## Statistical Significance and Magnitude of $\beta$
+
+You, probably, remember this from the problem sets. For yourself and reader it's easier to compare effects visually.
+
+To extract additional information automatically from the model, we use `tidy()` function from `broom` library. Take a moment to compare to "native" output.
+
+```{r}
+library(broom)
+summary(model_int)
+```
+
+This pretty much the dataframe with the regression output. Thus, it simplifies our work for visualization purposes! (and similar functionality is available in `modelsummary` library with `get_estimates()` command)
+
+```{r}
+model_int_output = tidy(model_int, conf.int = TRUE, conf.level = 0.95)
+model_int_output
+```
+
+Plotting the effects is great to provide intuition about the significance and the magnitude of the effects. But! Don't forget about the scales! Are you comparing comparable? Scaling may be helpful: how can you compare one unit increase in `Log_GDP` to "one unit increase" in `International_conflict`?
+
+Moreover, you cannot interpret the effect of `International_conflict` or `Log_GDP` without accounting for the interaction term. In our case, this plot is not publishible and is quite misleading. It is more suitable for fixed effects and simple additive models. However, don't forget about the scale!
+
+```{r}
+ggplot(model_int_output) +
+  geom_linerange(aes(x = term,
+                    y = estimate,
+                    ymin = conf.low,
+                    ymax = conf.high)) +
+  geom_point(aes(x = term,
+                 y = estimate)) +
+  geom_hline(yintercept = 0, lty=2, color="gray") +
+  coord_flip()
+```
+
+## Predicted values
+
+Presenting predicted values provides the reader with intuition about what happens when variables take specific values. For example, we take the most typical GDP, and calculate the effects for two categorical variables: `International_conflict` and `Regime`. 
+
+```{r}
+ggpredict(model_int, terms = c("International_conflict", "Regime")) 
+```
+
+Let's make it look publishable. We wrangle the data a bit. By now, the code shouldn't stress you out. If it does, then run it step-by-step to get a sense of what's going on!
+
+```{r}
+model_int_groupped = ggpredict(model_int, terms = c("International_conflict", "Regime")) %>%
+  as.data.frame() %>%
+  rename(International_conflict = x,
+         Regime = group,
+         Import = predicted) 
+
+model_int_groupped
+```
+
+Finally, present the marginal effects using `tinytable`.[^1] The code below is quite messy, in your free time you can explore it in a more detail. For now, I want this code to be available to you. Add this line of code in the end: `save_tt("predicted_values.html")` to save the table on your machine.
+
+[^1]: Great example of research presenting the results in a similar manner can be found in Reuter, O.J. and Szakonyi, D., 2015. Online social media and political awareness in authoritarian regimes. *British Journal of Political Science*, 45(1), pp.29-51.
+
+```{r}
+#| message: false
+
+library(tinytable)
+
+model_int_groupped %>%
+  group_by(International_conflict, Regime) %>%
+  summarize(Import = paste0(round(Import, 3), "\n", "[", round(conf.low, 3), "; ", round(conf.high, 3), "]")) %>%
+  pivot_wider(names_from = Regime,
+              values_from = Import) %>%
+  mutate(International_conflict = ifelse(International_conflict == 1, "Present", "Absent")) %>%
+  rename(`International Conflict` = International_conflict) %>% 
+  tt(note = "Adjusted for average log of GDP (=8.64)") %>%
+  group_tt(j = list("Regime" = 2:5)) 
+```
+
+## Marginal Effects
+
+Calculate the "typical" observation (or simply the average observation) across all indepdenent variables.
+
+```{r}
+typical_obs = sipri_vdem %>%
+      summarize(Log_GDP = mean(Log_GDP, na.rm = T),
+                International_conflict = table(International_conflict) %>% which.max() %>% names(),
+                Regime = table(Regime) %>% which.max() %>% names())
+
+typical_obs
+```
+
+This would be our baseline. We can calculate the predicted value for the typical observation.
+
+```{r}
+#| warning: false
+
+ggpredict(model_int, typical_obs)
+```
+
+However, the most interesting is to know how the DV change if the IV changes (holding everything else constant). Basically, we are trying to get a simple intepreation, as it is with the simple additive OLS. You can easily calculate the **average** marginal effect with one unit change in some X with `ggeffects` library. Moreover, you can illustrate how the predicted values change in comparison to the most typical observation.
+
+```{r}
+marginal_effects = list(Log_GDP = c(8.984952, 8, 8.5, 9.5, 10),
+                        International_conflict = c("0"),
+                        Regime = c("Autocratic", "Democratic"))
+
+
+ggpredict(model_int, marginal_effects) 
+```
+
+
+# Exercises
+
+Let's start with extracting the variables for the analysis. Select `country_name`, `year`, and Life expectancy (`e_pelifeex`) from vdem data.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+```{r}
+#| eval: false
+
+vdem_extraction = vdem %>%
+  ...
+```
+
+:::
+
+Now, using `left_join()`, combine two dataframes: `sipri` and `vdem_extraction`.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+```{r}
+#| eval: false
+
+sipri_expectancy = sipri %>%
+  ...(..., by = c("Recipient" = "country_name", 
+                                     "Year" = ...))
+```
+
+:::
+
+In the newly created `sipri_expectancy` dataframe, rename the `e_pelifeex` to `Life_expectancy`
+
+::: {.callout-tip icon="false"}
+## Solution
+
+```{r}
+#| eval: false
+
+sipri_expectancy = ... %>%
+  ...(Life_expectancy = ...)
+```
+
+:::
+
+Draw a `ggpairs()` graph (library is `GGally`). Can you discern any patterns (e.g., intersection of regime vs life expectancy or import vs life expectancy)?
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Set up a fixed effects model. Regress `Import` against `Life_expectancy` and `Regime`
+
+::: {.callout-tip icon="false"}
+## Solution
+
+```{r}
+#| eval: false
+
+life_expectancy_model_fe = lm(...)
+```
+
+
+:::
+
+Present a summary table
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Present a `modelsummary()` table. Make it as publishable as possible. Don't forget to include the reference category for the `Regime` variable.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Using `tidy()`, extract technical information from the model, save it to `model_data` dataframe. Don't forget to extract 95% confidence intervals.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Using the information in `model_data`, plot the effects of the model. You can use either `geom_linerange()` or `geom_errorbar()`
+
+::: {.callout-tip icon="false"}
+## Solution
+
+```{r}
+#| eval: false
+
+ggplot(...) +
+  ...(aes(x = term,
+                    y = estimate,
+                    ymin = conf.low,
+                    ymax = ...)) +
+  geom_point(aes(x = ...,
+                 y = ...)) +
+  geom_hline(yintercept = 0, lty=2, color="gray") +
+  coord_flip()
+```
+
+:::
+
+Predict the value for the following observation: `Regime = "Democratic"` and `Life_expectancy = 62`. 
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+
+Present the marginal effects for the following groups: `Regime = c("Democratic", "Autocratic")` and `Life_expectancy = c(40, 50, 60)`. Who is importing more arms?
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+
+:::
+
+# Check List
+
+<input type="checkbox"/> I know how why we need `devtools`, and I'm happy to use cutting edge libraries!
+
+<input type="checkbox"/> I know how to use `GGally` to analyze pairs of variables 
+
+<input type="checkbox"/> I know basics of data merging (with `left_join()`!)
+
+<input type="checkbox"/> I can plot complex models with `ggeffects` library
+
+<input type="checkbox"/> I know how to save `modelsummary()` output to my machine
+
+<input type="checkbox"/> I am not afraid of using math mode and $\LaTeX$ 
+
+<input type="checkbox"/> I can easily extract additional model information using `broom` library and the `tidy()` function
+
+<input type="checkbox"/> I know how to plot confidence intervals
+
+<input type="checkbox"/> I have an intuition about predicted values and marginal effects

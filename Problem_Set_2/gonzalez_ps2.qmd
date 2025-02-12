@@ -1,0 +1,271 @@
+---
+title: "Answers to Problem Set 2"
+author: "Nicholas Gonzalez"
+editor: visual
+format: pdf
+---
+
+Worked on with Tanner Bentley.
+
+# Problem #1
+
+```{r}
+
+library(haven)
+
+zambia <- read_dta("zambia.dta")
+
+```
+
+## Problem 1, Part A 
+
+```{r}
+
+voteMP_treatment <- lm(zambia$voteMP ~ zambia$treatment)
+
+print(voteMP_treatment)
+
+library(tidyverse)
+library(modelsummary)
+
+modelsummary(voteMP_treatment)
+
+          
+
+```
+
+Interpreting this model, or the effect, we see that someone being informed that their chief voted for the MP candidate, has a positive effect, and a magnitude of .036. For the intercept, the sign has a positive effective, with a slope or magnitude of change of 0.342. This would be 34.2%. Our treatment, which is being told the cheif's preferences. 
+
+
+## Problem 1, Part B, i
+
+
+```{r}
+
+interaction_model_1 <- lm(voteMP ~ treatment * chiefMPimportant, data = zambia)
+
+modelsummary(interaction_model_1)
+
+
+interaction_model_2 <- lm(voteMP ~ treatment * chiefchangetreat, data = zambia)
+
+# View the summary of the model
+modelsummary(interaction_model_2)
+
+
+modelsummary(list("Model 1" = interaction_model_1, "Model 2" = interaction_model_2))
+
+
+```
+
+Model 1:
+
+$$
+\text{voteMP}_i = \beta_0 + \beta_1 \cdot \text{treatment}_i + \beta_2 \cdot \text{chiefMPimportant}_i + \beta_3 \cdot (\text{treatment}_i \times \text{chiefMPimportant}_i) + u_i
+$$
+
+
+Model 2: 
+
+
+$$
+\text{voteMP}_i = \beta_0 + \beta_1 \cdot \text{treatment}_i + \beta_2 \cdot \text{chiefchangetreat}_i + \beta_3 \cdot (\text{treatment}_i \times \text{chiefchangetreat}_i) + u_i
+$$
+
+
+## Problem 1, Part B, ii
+
+
+Interpreting both models:
+
+*Model 1:* Interaction Between Treatment and Chief-MP Importance
+
+The intercept, or baseline for the respondents in the control group who did not consider both the chief, or MP important is .306. The treatment for the latter group has a negative sign, so it is decreasing, and a magnitude of .046 (so, -0.046). The treatment for this however is larger for the respondents who consider the MP and chief important. This tells us that the treatment of the experiment is more effective for this group. This highlights the perceived important of both the chief, as well as the MP. 
+
+
+*Model 2:* Interaction Between Treatment and Fear of Retaliation
+
+For the control group that does not fear relation the sign is positive, and the magnitude is 0.376. The treatment effect for this specific group is .021, so also positive. The respondents who fear retaliation of some kind have an outcome that -0.060 lower, but the interaction between the treatment and fear of relation is smaller (-0.014). This tells us that fear of retaliation does not greatly affect the treatment, and the latter does not greatly vary across groups. 
+
+
+
+## Problem 1, Part B, iii
+
+
+```{r}
+pred_1 <- predict(interaction_model_1, newdata = zambia)
+
+zambia$pred_1 <- pred_1
+
+
+```
+
+```{r}
+library(tidyverse)
+
+# For interaction_model_1 (with `chiefMPimportant`)
+table_1 <- zambia %>%
+  group_by(treatment, chiefMPimportant) %>%
+  summarise(mean_pred_1 = mean(pred_1), 3) %>%
+  spread(key = chiefMPimportant, value = mean_pred_1)
+
+
+# View the tables
+print(table_1)
+
+```
+
+```{r}
+
+library(tidyverse)
+library(knitr)
+
+table_1 <- zambia %>%
+  group_by(treatment, chiefMPimportant) %>%
+  summarise(mean_pred_1 = round(mean(pred_1), 3)) %>%
+  spread(key = chiefMPimportant, value = mean_pred_1) %>%
+  mutate(treatment = if_else(treatment == 0, "Control", "Treatment")) %>%
+  rename(
+    "Both  Important" = "0",
+    "Both Not Important" = "1"
+  )
+
+
+kable(table_1,
+      caption = "Mean Predictions by Treatment and Chief MP Importance",
+      align = c("l", "c", "c"))
+
+```
+
+
+
+
+## Problem 1, Part B, iv
+
+```{r}
+
+library(ggeffects)
+library(ggplot2)
+```
+
+
+```{r}
+
+interaction_model_article <- lm(voteMP ~ treatment * chiefMPimportant , data = zambia)
+
+```
+
+
+```{r}
+interaction_model_article <- ggeffects::ggpredict(interaction_model_article, terms = c("treatment", "chiefMPimportant"))
+
+head(interaction_model_article)
+```
+
+
+```{r}
+
+library(ggplot2)
+
+ggplot(interaction_model_article, aes(x = x, y = predicted, color = group)) +
+  geom_point(size = 3, position = position_dodge(width = 0.2)) +
+  geom_line(aes(group = group), size = 1, position = position_dodge(width = 0.2)) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), 
+                width = 0.2,  # Width of the error bar ends
+                position = position_dodge(width = 0.2), 
+                size = 0.8) +  # Thickness of the error bars
+  labs(
+    title = "Predicted VoteMP by Treatment and Chief MP Importance",
+    x = "Treatment",
+    y = "Predicted VoteMP",
+    color = "Chief MP Importance"
+  ) +
+  scale_color_manual(values = c("magenta", "green")) +  
+  theme_minimal() +
+  theme(legend.position = "top")
+
+```
+
+
+
+## Problem 2, Part A
+
+```{r}
+
+load("~/Documents/PS405-Linear-Models/Problem_Set_2/schools.RData")
+
+```
+
+```{r}
+
+model_schools <- lm(math ~ size.small + size.medium + size.large, data = schools)
+
+model_schools
+
+modelsummary(model_schools)
+
+
+```
+
+The results automatically picked the reference category as "size.large" so that is what the intercept is. R/OLS automatically picks a reference category. If we look at our model it is why it says NA for size.large. The other categories, size.small and size.medium, are being compared to size.large since that is the reference category. Both other sizes, medium and small have positive slope coefficients, with magnitudes of 5.094 and 3.230 respectively. 
+
+
+The original model shown uses all three dummy, or categorical variables, those being small, medium and large. This means we do not have a reference group(technically, but R fixes this for us). To fix the model's notation, we would drop one categorical variable, to have it serve as a reference group. For this model, I picked _small._ This violates the multi-collinearity assumption/rule. 
+	
+	
+$$
+\hat{\text{math}}_i = \beta_0 + \beta_1 \cdot \text{size.medium}_i + \beta_2 \cdot \text{size.large}_i + u_i
+$$
+
+
+
+## Problem 2, Part B
+
+```{r}
+plot(schools$read, schools$teachers)
+
+```
+The data looks like it could be non-linear, but the result is inconclusive from looking at this scatterplot. There is some evidence of a quadratic shape. 
+
+
+```{r}
+
+linear_schools <- lm(read ~ teachers + size.medium + size.large, data = schools)
+
+modelsummary(linear_schools)
+
+```
+
+
+
+
+```{r}
+
+poly_schools <- lm(read ~ poly(teachers, 2) + size.medium + size.large, data = schools)
+
+
+modelsummary(poly_schools)
+```
+
+
+```{r}
+
+modelsummary(list("Linear" = linear_schools, "Poly" = poly_schools))
+
+
+```
+
+
+
+The polynomial model created accounts for the non-linear features in the relationship between the teachers, and reading scores. However, the slope coefficients for the medium and large schools, in both the polynomial and linear model are similar, which may suggest that making this a polynomial model does not change the estimated effects significantly. This can also be inferred via the R^2, which are both very similar. A benefit of the polynomial model however is that we can see the impact the number of teachers has. The results of the model suggest that there is a nonlinear relationship between amount of teachers and outcome as the model shows a higher number of teachers has a larger and growing effect on the outcome. This is something sort of inferred previously in the scatterplot. 
+
+
+
+
+
+```
+
+
+
+
+

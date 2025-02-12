@@ -1,0 +1,187 @@
+---
+title: "Submission for Problem Set 3"
+author: "Nicholas R. Gonzalez"
+format: pdf
+editor: visual
+---
+
+Worked on with Tanner Bentley. 
+
+# Problem 1
+
+## Problem 1 Part A
+
+### Problem 1, Part A, part i
+```{r}
+
+# this is the table for the regression asked for in Part i
+
+library(modelsummary)
+library(tidyverse)
+library(haven)
+
+exp_data <- read_csv("pset_3/exp_data.csv")
+
+respond_out <- lm(exp_data$responded ~ exp_data$treat_out, data = exp_data)
+
+# modelsummary(respond_out)
+
+# creating a table and cleaning it up 
+
+responded_model <- modelsummary(
+  list("Model 1" = respond_out),
+  title = "District Impact on Legislator Email Response",
+  coef_map = c("exp_data$treat_out" = "Out-of-District Email"),
+  stars = TRUE,  
+  fmt = 3, 
+  statistic = "conf.int")
+
+print(responded_model)
+
+```
+The model presented examines the likelihood of response when receiving an email from someone outside the district. Our coefficient, “Out-of-District Email” is -0.266 and is statistically significant at the 1% level (p < 0.01). So when holding other factors constant, receiving an email from outside the district is associated with a decrease of 0.266 units in the outcome variable, which is to receive a response, or for the (a) legislative person to email back. The model also shows an R^2 of 0.073. Therefore 7.3% of the variance in the outcome is explained by the predictors included in the model. This means that a fair amount of unobserved factors are also influencing the outcome. For this data, we are using a dummy variable, so the one unit increase would just be if the legislator is black or not, and if the legislator responded or not. But, in short, a one unit increase, so in the case of this model, receiving an email from outside the district, is associated with a small decrease in receiving an email back, or the outcome variable. 
+
+## Problem 1 Part B
+
+### Problem 1 Part B, part i
+
+
+```{r}
+
+
+
+respond_black <- lm(responded ~ treat_out * leg_black, data = exp_data)
+
+modelsummary(respond_black)
+
+# creating a table and cleaning it up 
+
+black_leg_model <- modelsummary(
+  list("Black Legislator's Response to Emails" = respond_black),
+  title = "Black Legislator's Response to Emails",
+  statistic = c("std.error", "conf.int"),  
+  stars = TRUE, 
+  fmt = 3,  
+  coef_rename = c(
+    "treat_out" = "Out-of-District Email", 
+    "leg_black" = "Black Legislator"  )  # Clean up the coefficient names, including the intercept term
+)
+
+
+print(black_leg_model)
+
+```
+
+### Problem 1 Part B, part ii
+
+The results of this model suggest that receiving an out of district email decreases the likelihood of a legislator (or their staff?) responding by 0.275 units. I however am not sure why this coefficient is different than the first model, when this part of the regression is the same. Nonetheless, the coefficient "leg_black" which references if the legislator was black or not, tells us that black legislators are .097 less likely to respond compared to non-Black legislators. Looking at the interaction, the effect of receiving an out of district email is greater for non-Black legislators, as opposed to black ones. Again, for this data, we are using a dummy variable, so the one unit increase would just be if the legislator is black or not, and if the legislator responded or not. 
+
+
+## Problem 1 Part C
+
+### Problem 1 Part C, part i
+
+```{r}
+
+respond_income_poly <- lm(responded ~ poly(medianhhincom, 2), data = exp_data) # 2 for second order conditions 
+
+modelsummary(respond_income_poly)
+
+
+```
+
+
+### Problem 1 Part C, part ii
+
+
+```{r}
+library(ggeffects)
+
+effect_plot <- ggpredict(respond_income_poly, terms = "medianhhincom [all]")
+
+ggplot(effect_plot, aes(x = x, y = predicted)) +
+  geom_line(color = "blue") + 
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), fill = "blue", alpha = 0.2) +  
+  labs(
+    title = "Effects of Median Household Income on Legislative Response",
+    x = "Median Household Income",
+    y = "Predicted Likelihood of Response"
+  ) +
+  theme_minimal()
+
+```
+
+### Problem 1 Part C, part iii
+
+When interpreting non-linear models, sometimes the coefficients can be difficult to understand, or evaluate. However, after graphing the polynomial model, we can see the shape of the plot suggest there is a strong non-linear relationship, where there is diminishing returns of having a higher household income, and a legislator responding. But as the median household income reaches its max, the there is actually less of a likelihood of getting a legislative response than the lowest median income. However, there is also a much larger confidence interval range, suggesting that the data might be inconclusive for higher house hold incomes. This is likely because there is less data on high income households emailing legislators. So there is likely much more variance going on. The very low R^2 even by social science standards at .003 is very telling howeverl 
+
+### Problem 1 Part C, part iv
+
+The linearity assumption in OLS refers to a model being linear in its parameters, not necessarily between predictors and the outcome. By using a polynomial model, I am modeling a non-linear relationship between median household income and the legislative response. Since the regression remains linear in the coefficients (because of no continous variables), I am not violating OLS's linearity assumption. Lastly, uusing a higher-order term captures curvature in the data while maintaining structure for OLS. 
+
+
+
+
+## Problem 1 Part D
+
+### Problem 1 Part D, part i & ii 
+
+
+```{r}
+
+# standardizing the data with scale() which is in base r
+
+exp_data$statessquireindex_scaled <- scale(exp_data$statessquireindex) / 2
+
+exp_data$totalpop_scaled <- scale(exp_data$totalpop) / 2
+
+scaled_response_model <- lm(responded ~ leg_black + statessquireindex_scaled + south + totalpop_scaled, data = exp_data)
+
+summary(scaled_response_model)
+
+
+```
+### Problem 1 Part D, part iii
+
+
+
+```{r}
+
+library(broom)
+library(ggplot2)
+
+model_tidy <- tidy(scaled_response_model, conf.int = TRUE, conf.level = 0.90)
+
+#tidyverse plot
+
+ggplot(model_tidy, aes(x = estimate, y = term, xmin = conf.low, xmax = conf.high)) +
+  geom_point() +  
+  geom_errorbarh(height = 0.2) +  
+  geom_vline(xintercept = 0, linetype = "dotted") + 
+  labs(
+    title = "Effects of Variables on Legislative Response to Emails",
+    x = "Estimated Effect (Standardized Coefficients)",
+    y = "Predictors",
+    caption = "90% Confidence Intervals"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.y = element_text(size = 12),  
+    axis.title.x = element_text(size = 12),  
+    plot.title = element_text(hjust = 0.5, size = 14)
+  )
+```
+## Problem 1 Part D, part iv
+
+
+
+The Squire Index stands out as the most significant factor. This finding also theoretically makes sense. The data defines the Squire Index as a _"measure of professionalization of state legislatures that ranges from 0-100"_, which accounts for legislators’ salaries, staff size, and their legislative session lengths. A more professionalized legislature likely means legislators have more resources and availability, making them more inclined to respond to emails. Or have staff who can respond to emails. 
+
+
+
+
+
+
+
+
+
