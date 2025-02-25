@@ -1,0 +1,480 @@
+---
+title: "Robust and Clustered Standard Errors"
+subtitle: "Week 7"
+date: 2025-02-20
+format: 
+  html:
+    embed-resources: true
+toc: true
+---
+
+# Before we start
+
+-   Any questions?
+
+<center>
+<a href="https://artur-baranov.github.io/nu-ps405-ds/scripts/ps405-d_7.qmd" class="btn btn-primary" role="button" download="ps405-d_7.qmd" style="width:200px" target="_blank">Download script</a>
+</center>
+<br>
+<center>
+<a href="https://artur-baranov.github.io/nu-ps405-ds/data/cpds.xlsx" class="btn btn-primary" role="button" download="cpds.xlsx" style="width:200px" target="_blank">Download data</a>
+</center>
+
+# Review of the previous week
+
+::: callout-note
+## Review
+
+Load `tidyverse` library
+
+```{r}
+#| message: false
+library(tidyverse)
+```
+
+Load the George Ward's replication data
+
+```{r}
+
+load("~/Documents/PS405-Linear-Models/Labs/ward2020.RDta") 
+
+
+```
+
+using `ggpairs()` from `GGally` library, visualize the relationships between the variables. What can you see?
+
+```{r}
+library(tidyverse)
+library(GGally)
+
+ggpairs(dta)
+
+```
+
+
+Explore the relationship between subjective well being (`satislfe_survey_mean`) and number of parties in government (`parties_ingov`). Draw a boxplot. Does it look right? If not, correct!
+
+```{r}
+
+dta$parties_ingov = as.factor(dta$parties_ingov)
+
+boxplot(dta$satislfe_survey_mean, dta$parties_ingov)
+
+
+
+```
+
+Set up a pooled model. Predict `satislfe_survey_mean` by `parties_ingov`. Save the model to `model_pooled` object. Present summary. What do you think about the model?
+
+```{r}
+
+model_pooled <- lm(satislfe_survey_mean ~ parties_ingov, data = dta)
+
+library(modelsummary)
+
+modelsummary(model_pooled)
+
+
+```
+
+Introduce country fixed effects. Save it to the `model_countryfe` object. Present summary. Compare it to the pooled model. Pay attention to $R^2$. Why are they different?
+
+```{r}
+model_pooled_2 <- lm(satislfe_survey_mean ~ parties_ingov + model_countryfe, data = dta)
+
+modelsummary(model_pooled_2) 
+
+```
+
+Using `ggpredict()` from `ggeffects` library visualize `model_countryfe`. Plot `parties_ingov` and the following `country` values: `BEL, DNK, SWE`. Take a moment to understand the graph. Insert the argument `connect_line = TRUE` to make the comprehension of the graph easier.
+
+```{r}
+
+```
+
+:::
+
+# Review of the homework
+
+The `set.seed()` function allows you to make the random process "controllable". To get the sense of what's going on, let's experiment a bit.
+
+Let's randomly generate 10 integers. Each time you run the chunk below, a different vector is generated.
+
+```{r}
+sample.int(100, 10)
+```
+
+Now, if we want to get the same results each time, we can set the seed.
+
+```{r}
+set.seed(123)
+
+sample.int(100, 10)
+```
+
+Be careful when you include the `set.seed()` within functions. 
+
+```{r}
+wrongfunc = function(x){
+  set.seed(123)
+
+  sample.int(x, 10)
+}
+```
+
+In simulations it wouldn't allow you to randomly sample/generate data.
+
+```{r}
+for(i in 1:10){
+  print(wrongfunc(100))
+}
+```
+
+Instead, you would want that the loop would produce the constant result. 
+
+```{r}
+corrfunc = function(x){
+  sample.int(x, 10)
+}
+
+set.seed(123)
+for(i in 1:10){
+  print(corrfunc(100))
+}
+```
+
+# Agenda
+
+-   Introduction to diagnostics
+
+-   Fixing heteroscedasticity
+
+-   And if we can't, then we will be working with robust standard errors
+
+-   Finally, dealing with clustered standard errors
+
+
+# Country-Year Fixed Effects Model
+
+Let's explore Comparative Political Dataset. It consists of political and institutional country-level data. Take a look on their [codebook](https://cpds-data.org/wp-content/uploads/2024/11/codebook_cpds.pdf).
+
+Today we are working with the following variables.
+
+-   `prefisc_gini` - Gini index. What is it?
+
+-   `openc` - Openness of the economy (trade as % of GDP)
+
+-   `servadmi_pmp` - Public and mandatory private employment services and administration as a percentage of GDP.
+
+-   `country` and `year`
+
+First of all, let's load the data
+
+```{r}
+library(readxl)
+cpds = read_excel("data/cpds.xlsx")
+```
+
+Imagine you are interested in explaining inequality (`prefisc_gini`) by the amount of trade (measured as oppenness of the economy -- `openc`). Set up a simple linear regression (slr).
+
+```{r}
+model_slr = lm(prefisc_gini ~ openc, cpds)
+summary(model_slr)
+```
+
+Given how complex the inequality, it's fair to assume we have some confounders. Let's control for labour market policies (measured by Public employment as % of GDP -- `servadmi_pmp`). Set up a multiple linear regression (MLR) below. What do you think about the model?
+
+```{r}
+model_mlr = lm(prefisc_gini ~ openc + servadmi_pmp, cpds)
+summary(model_mlr)
+```
+
+How can we check if the homoscedasticity assumption is satisfied? Proceed with simple analysis. Extract residuals and fitted (predicted) values. Plot it. What do you think?
+
+```{r}
+res = model_mlr$residuals
+fit_val = model_mlr$fitted.values
+
+ggplot() +
+  geom_point(aes(x = fit_val, y = res)) +
+  geom_hline(yintercept = 0) 
+```
+
+The same plot can be easily accessed using the base R functions. We'll get to this next week in a more detail.
+
+```{r}
+plot(model_mlr, which = 1)
+```
+
+We know that our data is of `country`-`year` structure. Let's introduce the fixed effects to the model. First, make sure these are factors.
+
+```{r}
+cpds$country = as.factor(cpds$country)
+cpds$year = as.factor(cpds$year)
+```
+
+What has changed?
+
+```{r}
+model_fe = lm(prefisc_gini ~ openc + servadmi_pmp + country + year, cpds)
+summary(model_fe)
+```
+
+Now, let's check if the heteroscedasticity problem persists.
+
+```{r}
+plot(model_fe, which = 1)
+```
+
+Draw the same graph using `ggplot()`. What do you think, is there a problem?
+
+```{r}
+
+```
+
+Let's conduct a formal test using `bptest()` from `lmtest` library. It stands for Breusch-Pagan Test. How would you approach interpreting the results?
+
+```{r}
+#| warning: false
+#| message: false
+
+library(lmtest)
+bptest(model_fe)
+```
+
+# Robust Standard Errors
+
+Now, introduce robust SEs. They are also referred to as Heteroskedasticity-consistent standard errors (HC SEs).
+
+First, load the library `estimatr`. If you don't have it, take a moment to install.
+
+```{r}
+library(estimatr)
+```
+
+Now, we can use `lm_robust()` function to introduce the robust standard errors to attempt to account for the heteroscedasticity.
+
+```{r}
+model_hc = lm_robust(prefisc_gini ~ openc + servadmi_pmp, cpds,
+                     fixed_effects = country + year,
+                     se_type = "HC2")
+summary(model_hc)
+```
+
+Let's compare two models side by side. What's the difference? Did we account for heteroscedasticity? Remember that we have not displayed estimates for fixed effects.
+
+```{r}
+#| message: false
+#| warning: false
+
+library(modelsummary)
+modelsummary(list("Fixed Effects Model" = model_fe, 
+                  "Fixed Effects Model (HC)" = model_hc), 
+             stars = T,
+             coef_omit = "country|year",
+             gof_omit = "AIC|BIC|Log.Lik.|RMSE",
+             coef_rename = c("Intercept",
+                             "Economy Openness",
+                             "Public Sector"))
+```
+
+
+# Clustered Standard Errors
+
+During the lecture we have discussed clustered standard errors. Let's try to implement it.
+
+Assuming there is a correlation between country X in year $t$ and year $t+1$, it's valid to introduce clustered standard errors to the model. However, be careful if you don't have enough obervations. Note a couple of things:
+
+-   $R^2$ did not change
+
+-   $\beta$ coefficients did not change
+
+```{r}
+model_clust = lm_robust(prefisc_gini ~ openc + servadmi_pmp, cpds,
+                      fixed_effects = country + year,
+                      clusters = country)
+
+modelsummary(list("Fixed Effects Model" = model_fe, 
+                  "Fixed Effects Model (HC)" = model_hc,
+                  "Fixed Effects Model (HC + Cl)" = model_clust), 
+             stars = T,
+             coef_omit = "country|year",
+             gof_omit = "AIC|BIC|Log.Lik.|RMSE",
+             coef_rename = c("Intercept",
+                             "Economy Openness",
+                             "Public Sector"))
+```
+
+Let's compare the models visually. First, extract the information using `tidy()`. The code below is a bit confusing, take a moment in your free time to get a sense what's going on.
+
+```{r}
+library(broom)
+model_comparison = bind_rows(cbind(model = "Fixed Effects (HC)", tidy(model_hc, conf.int = T)),
+                             cbind(model = "Fixed Effects (HC + Cl)", tidy(model_clust, conf.int = T)))
+model_comparison
+```
+
+This is a variation of an effects plot, but instead of comparing different estimates, we compare the estimate across models. Clustering standard errors has widened our confidence intervals, which now cross zero.
+
+```{r}
+model_comparison %>%
+  filter(term == "openc") %>%
+  ggplot(aes(y = model, x = estimate)) + 
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, height = 0.1), position = "dodge") + 
+  geom_vline(xintercept = 0, linetype = 2) + 
+  geom_point(position = position_dodge(width = 0.1)) + 
+  theme_bw()
+```
+
+However, a small note on robust standard errors: they are not a panacea. If faced with heteroscedasticity, consider reporting different model specifications. Similarly, as we did—try out different standard errors, clustering methods, and assess how robust your model is. If your results do not hold across different model specifications, this is a signal that there may be no effect or an indication to explore alternative solutions.
+
+-   Use another model (e.g., if you're dealing with binary dependent variable, you can use logit insted of linear probability model)
+
+-   Transform DV
+
+# Exercises
+
+Let's continue exploring CPDS dataset. The goal to identify what factors are associated with right-wing parties popularity. Say, you operatianlize it as parliamentary seat share of right-wing parties in government (`gov_right3`). 
+
+Is political fragmentation associated with right-wing popularity? Quite frequently political fragmentation is measured using the effective number of parties index. Feel free to explore it in your free time [here](https://en.wikipedia.org/wiki/Effective_number_of_parties). CPDS has index for this: `effpar_leg`. 
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Set up a simple linear regression. Set `gov_right3` as dependent variable, and `effpar_leg` as independent. Present the summary. Take a moment to interpret the results.
+
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Let's check if the homoscedasticity assumption is satisfied. First, plot the residuals vs fitted graph eather using `plot()` or `ggplot()`. Does the graph show homoscedasticity?
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Let's formally test it. Run Breusch-Pagan test (`bptest()` from `lmtest` library). Interpret the results.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Ok, apparently there is something wrong with the data. Let's first understand the relationship between dependent and independent variable. Using `geom_point()` plot `effpar_leg` against `gov_right3`.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Doesn't look linear, right? Let's experiment. We see that there is a high zero inflation. We don't know how to solve it yet, so let's get rid of all zeroes for `gov_right3`. Using `filter()`, leave observations where `gov_right3` is not equal to 0.
+
+
+
+::: {.callout-tip icon="false"}
+## Solution
+
+```{r}
+#| eval: false
+
+cpds_nozeroes = ...
+```
+
+:::
+
+
+Now, create a new variable `sqrt_effpar_leg` that would be a square root of `effpar_leg`. You can use `mutate()` for this task.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Then, draw a scatterplot, where `sqrt_effpar_leg` is on the X axis, and `effpar_leg` on the Y. Draw a regression line. Were we able to make the relationsip linear? 
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Set up a model, where `gov_right3` is dependent variable, and `sqrt_effpar_leg` is independent. Present the summary. Compare this adjusted model to the previous one.
+
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+
+Let's check if the homoscedasticity assumption is satisfied for the adjusted model. Plot the residuals vs fitted graph eather using `plot()` or `ggplot()`. How does it compare?
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Now, using `lm_robust()` cluster standard errors by `country`. Present summary. How did the results change? Pay special attention to the standard error.
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+
+:::
+
+Add the `country` and `year` fixed effects. Make sure that `year` is of class factor. How did p-value change? Why?
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+Present the results for the models using `modelsummary()`. Indicate confidence intervals. Are the models robust? What do we account for, and what don't we?
+
+::: {.callout-tip icon="false"}
+## Solution
+
+YOUR SOLUTION HERE
+
+:::
+
+
+# Check List
+
+<input type="checkbox"/> I know what the standard error is
+
+<input type="checkbox"/> I remember homoscedasticity assumption
+
+<input type="checkbox"/> I know when I might need to use robust standard errors
+
+<input type="checkbox"/> I know when I might need to use clustered standard errors
+
+<input type="checkbox"/> I know how to use `lm_robust()` to account for fixed effects and various standard errors
+
+
