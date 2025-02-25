@@ -5,9 +5,11 @@ format: pdf
 editor: visual
 ---
 
-# Problem 1 
+Worked on with Tanner Bentley. 
 
-## Hints 
+# Problem 1
+
+## Hints
 
 ```{r}
 #install.packages("mlmRev")
@@ -28,35 +30,17 @@ levels(df$sector)
 
 ```
 
-### a 
+### a
 
-Intercept (13.242)
-	•	This represents the expected math achievement score for a public school, non-minority, male student with SES = 0.
-	•	Since SES is typically standardized (mean = 0), this is the baseline score.
-	
-	
-	Sector: Catholic vs. Public (2.255, p < 0.05)
-	•	Attending a Catholic school is associated with a 2.255-point higher math achievement score than attending a public school, holding other variables constant.
-	•	This suggests a positive effect of Catholic schooling.
-	
-	
-	Minority Status (-3.112, p < 0.05)
-	•	Being a minority student is associated with a 3.112-point lower math score compared to non-minority students, controlling for school sector, sex, and SES.
-	•	This is a significant gap, indicating potential disparities in educational outcomes.
-	
-	
-	Sex: Female (-1.422, p < 0.05)
-	•	Female students score 1.422 points lower than male students, holding other factors constant.
-	•	This suggests a gender gap in math achievement.
-	5.	Socioeconomic Status (SES) (2.364, p < 0.05)
-	•	A one-unit increase in SES is associated with a 2.364-point increase in math scores.
-	•	SES has a substantial effect, highlighting the strong relationship between socioeconomic background and academic performance
-	
-	Conclusion
-	•	Catholic school students outperform public school students in math.
-	•	Minority students have significantly lower math scores, even after controlling for school type, SES, and sex.
-	•	Females score lower than males in math, suggesting a gender gap.
-	•	SES is strongly positively associated with math achievement.
+Regarding school type, attending a catholic school is associated with a 2.25 increase in math achievement, suggesting a positive effect for Catholic schools and math skills 
+
+Regarding minority status, being a racial minority is associated with a 3.11 lower math score compared to whites. This highlights a drastic gap in peformance in math between whites, and non whites. 
+
+According to our data, females score 1.42 points lower than male students, suggesting a gender gap, but not a drastic one. 
+
+Higher socio-economic status is associated with an increase in math scores, by 2.364 points. 
+
+In short, being from a catholic school, suggest higher math performance, as well as being a white, affluent male. 
 
 
 ```{r}
@@ -68,15 +52,14 @@ modelsummary(model)
 
 ```
 
+### b
 
-### b 
-
-Yes, clustering standard errors is appropriate in this case because students are likely nested within schools, meaning observations are not independent within clusters (schools).
+For our data, clustering the standard errors, or clustering in general is appropriate because each case has many students that go to one school. So observations are not independent. 
 
 
 ### c
 
-My coefficients stayed the same but my standard errors increased, by about 100%. This is because without clustering, standard errors assume each student is independent. So clustering would adjust for intra-school correlation. 
+The coefficient results stayed the same, but my standard errors increased by about 100%. This is because without clustering the standard errors assume each student is independent, therefore clustering helps us adjust for intra-school correlaiton 
 
 
 ```{r}
@@ -91,11 +74,9 @@ model_clustered <- lm_robust(mAch ~ sector + minrty + sx + ses,
 modelsummary(model_clustered)
 ```
 
-
-
 ### d
 
-All results are within a hundreth of each other. 
+All results are within a hundredth of each other, and the coefficients remain the same. 
 
 ```{r}
 #install.packages('sandwich')
@@ -104,17 +85,19 @@ library(sandwich)
 library(lmtest)
 
 model <- lm(mAch ~ sector + minrty + sx + ses, data = df)
+
 summary(model)
 
-vcov_clustered <- vcovCL(model, cluster = ~school_id)
+vcov_clustered <- vcovCL(model, cluster = ~ school_yr)
 
 coeftest(model, vcov = vcov_clustered) 
 
 ```
 
-### e 
+### e
 
-The standard errors go down, there is more data.
+After the bootstrap, my standard errors increased. This is likely because the bootstrap approach led to larger variance. It does so by re-sampling the data. This may mean that effects were not well estimated before. We have a decent size sample however, so I am not sure that bootstrapping is necessary. 
+
 
 ```{r}
 library(multiwayvcov)
@@ -125,19 +108,15 @@ summary(model)
 
 set.seed(123) 
 
-vcov_boot <- cluster.boot(model, cluster = df$school_id, R = 1000, parallel = TRUE)
+vcov_boot <- cluster.boot(model, cluster = df$school_yr, R = 1000, parallel = TRUE)
 
 coeftest(model, vcov = vcov_boot)
 
 ```
 
-
 # Problem 2
 
-### a 
-
-The ratio of standard errors between the clustered and non-clustered models is influenced by the structure of the data and how clustering affects the variance estimation. 
-
+### a
 
 ```{r}
 pset6data <- function(m, n){ 
@@ -163,7 +142,6 @@ pset6data <- function(m, n){
 }
 ```
 
-
 ```{r}
 
 set.seed(123)
@@ -180,7 +158,7 @@ model_two <- lm(Y ~ X, data = scenario_two)
 
 model_two_cluster <- lm_robust(Y ~ X, data = scenario_two, clusters = scenario_one$cluster.id)
 
-scenario_three_cluster <- pset6data(100, 50)
+scenario_three <- pset6data(100, 50)
 
 model_three <- lm(Y ~ X, data = scenario_three)
 
@@ -212,33 +190,14 @@ summary(model_four_cluster)
 
 ### b
 
-**Scenario 1:**
 
-•	The coefficient remains the same in both models.
-	•	The standard error in the non-clustered model is much smaller (0.0085) than in the clustered model (0.0311). This is expected because clustering accounts for intra-cluster correlation, which leads to larger standard errors to reflect the added uncertainty in the estimates due to clustering.
+For our first scenario, the coefficients remain the same in both models, but the standard errors in the non-clustered model(0.0085) is smaller than in the clustered model (0.0311). This is as expected, from what we previously discussed about clustering. 
 
-**Scenario 2:**
+This is also true for scenario two, where standard error in the non-clustered model (0.0086) is again smaller than the clustered model (0.0379). 
 
-The coefficient is unchanged.
-	•	The standard error in the non-clustered model is smaller (0.0086) than in the clustered model (0.0379). Again, this is due to clustering accounting for additional variation within clusters, leading to more conservative (larger) standard errors.
+This same logic upholds across every scenario, but with their respective results. 
 
-**Scenario 3:**
+For scenarios three and four, again the coefficients are unchanged. However the ratio changes. The ratios are S1: 3.65, S2: 4.11, S3: 1.54, S4: 1. 58. This is because the degree of clustering, or the amount of grouping differs with each scenario. Also the ratio like changes based on the intra-cluster effects. Which it makes sense as scenarios three and four have more clusters, but less units. 
 
-	The coefficient remains identical.
-	•	The standard error is larger in the clustered model (0.0137) compared to the non-clustered model (0.0089). Clustering adds more uncertainty by accounting for intra-cluster correlations.
-	
-
-**Scenario 4:**
-
-The coefficient is unchanged.
-	•	The standard error is larger in the clustered model (0.0139) compared to the non-clustered model (0.0088), again reflecting the intra-cluster correlation that the clustered standard errors adjust for.
-	
-
-Coefficient estimates are the same between the non-clustered and clustered models.
-	•	Standard errors are larger in the clustered models. This is because clustering corrects for the possibility that observations within the same cluster may not be independent, leading to more conservative (larger) estimates of the standard errors.
-	
-		This is because we have too many clusters, comapred to the amount of units we have, this causes us to have increased SE.
-
-
-
+Is it be safe to say that larger ratios mean stronger intra-cluster effects wheresas smaller eans weaker? 
 
