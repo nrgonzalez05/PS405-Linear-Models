@@ -1,0 +1,183 @@
+---
+title: "Problem Set 7"
+author: "Nicholas R. Gonzalez"
+format: pdf
+editor: visual
+---
+
+
+# Problem 1 
+
+```{r}
+library(tidyverse)
+library(haven)
+tabellini <- read_dta("pset_7/tabellini.dta")
+# View(tabellini)
+library(car)
+
+```
+
+## a
+
+### i
+
+```{r}
+library(car)
+# install.packages('car')
+library(ggplot2)
+
+model <- lm(rgdph ~ polityIV, data = tabellini)
+
+studentized_residuals <- rstudent(model)
+
+qqPlot(studentized_residuals, main = "QQ Plot of Studentized Residuals", pch = 20)
+
+summary(model)
+```
+
+### ii 
+
+In our log of GDP per capita, the QQ plot is better. The data is generally more fitted on our regression line. The following of the line better in plot two, suggest as well that the data has more of a normal shape as opposed to the plot in (a) (i). 
+
+```{r}
+
+tabellini$log_gdp <- log(tabellini$rgdph)
+
+log_model <- lm(log_gdp ~ polityIV, data = tabellini)
+
+studentized_residuals_log <- rstudent(log_model)
+
+qqPlot(studentized_residuals_log, main = "QQ Plot of Studentized Residuals", pch = 19)
+
+summary(log_model)
+```
+
+### iii
+
+When non-normality occurs, I think for this dataset, and in general the topics I am interested in it would be better to add relevant predictors. As I usually am interested in race, class and political economy, adding more predictors such as demographic data, or economic data, in theory would help my models. Which is the case for this dataset, and model, as we add the polity, gini and trade variables, we get better results. 
+
+
+```{r}
+
+model_mvars <- lm(rgdph ~ polityIV + gini_8090 + trade, data = tabellini)
+
+studentized_residuals_mvars <- rstudent(model_mvars)
+
+qqPlot(studentized_residuals_mvars, main = "QQ Plot of Studentized Residuals", pch = 19)
+
+summary(model_mvars)
+```
+
+## b
+
+### i 
+
+The errors of our data appear to be homoskedastic. This is because the red line increases at higher values, which tells our residual variance grows as predicted values increases. We also have some outliers, specifically 34, 56 and 58. 
+
+
+```{r}
+plot(model_mvars, which = 3)
+```
+
+### ii 
+
+We can use the Breusch-Pagan test to check for heteroskedasticity. It does so by testing if the variance of the residuals relies on the independent variable(s).
+
+The results of our BP text tell us that there is heteroskedasticity, but not a whole lot. This is because we only marginally reject the null (homoskedasticty), based on our p-value. 
+
+
+```{r}
+
+# install.packages('lmtest')
+library(lmtest)
+
+bptest(model_mvars)
+
+```
+
+
+### iii
+
+The coefficients are the same, but the standard errors are different. This might happen because the data might sensitive to influence points, or their might be strong outliers within our data. If this were true, latter would have higher leverage and disproportionately effect our model. The standard error then would be different for our robust standard errors because robust standard errors are designed to help deal with that issue. 
+
+
+
+```{r}
+
+library(modelsummary)
+library(sandwich) 
+library(lmtest)   
+
+hc_se <- vcovHC(model_mvars, type = "HC3")
+
+robust_test <- coeftest(model_mvars, vcov. = hc_se)
+
+modelsummary(list("OLS" = model_mvars, "HC3 Robust SE" = robust_test),
+             gof_omit = "R2|AIC|BIC|Log.Lik",
+             coef_map = c("polityIV" = "Polity Score", 
+                          "gini_8090" = "Gini Index", 
+                          "trade" = "Trade"),
+             title = "Regression Results: GDP per Capita")
+```
+
+
+
+## c
+
+
+### i
+
+The observations that stand out are ""Zimbabwe" & "Luxembourg". When looking at the data we can notice that Luxembourg and Zimbabwe are both on the far ends of the polity score. 
+
+```{r}
+
+influencePlot(model_mvars)
+
+model_mvars$model # confirming no observations have dropped 
+
+tabellini$country[c(34, 56)]
+
+```
+
+
+
+### ii 
+
+Once again, Zimbabwe stands out. This tells us that it has a significant impact on the democracy coefficient (polityIV) and may very large outlier. This is confirmed by the data as well as it is 6x lower than the next lowest polity score. 
+
+I also made a model to examine the coefficients without Zimbabwe. We can see removing Zimbabwe drastically changes the results of the polity coefficient.
+
+
+```{r}
+
+dfbetas_values <- dfbetas(model_mvars)
+
+dfbetas_democracy <- dfbetas_values[, "polityIV"]
+
+plot(dfbetas_democracy, type = "h", main = "DFBETAS for Democracy Coefficient", 
+     ylab = "DFBETAS", xlab = "Observation Index")
+abline(h = c(-2/sqrt(length(dfbetas_democracy)), 2/sqrt(length(dfbetas_democracy))), col = "red", lty = 2)
+
+influential <- which(abs(dfbetas_democracy) > 2/sqrt(length(dfbetas_democracy)))
+influential
+```
+
+```{r}
+
+model_no_zim <- lm(rgdph ~ polityIV + gini_8090 + trade, data = tabellini[-34, ])
+
+modelsummary(list("OLS" = model_mvars, "No Zimbabwe" = model_no_zim),
+             gof_omit = "R2|AIC|BIC|Log.Lik",
+             coef_map = c("polityIV" = "Polity Score", 
+                          "gini_8090" = "Gini Index", 
+                          "trade" = "Trade"),
+             title = "Removing Zimbabwe")
+```
+
+### iii
+
+As stated in the previous question, this issue occurs because how extreme Zimbabwe is. We could remove the observation from our dataset, or model, as I did in the previous question. We could also use robustness checks. For example robust standard errors. This is why our standard errors are different in the HC3 model in one of the previous questions. 
+
+
+
+

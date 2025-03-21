@@ -1,0 +1,773 @@
+---
+title: "Gonzalez - PS405 Final Problem Sent"
+date: today
+date-format: long
+format: 
+     pdf:
+       documentclass: article 
+fontsize: 12pt
+number-sections: true 
+bibliography: models.bib
+urlcolor: blue 
+geometry: # margins
+      - left=1in
+      - right=1in
+      - top=1in
+      - bottom=1in
+header-includes:
+    - \usepackage{setspace}
+    - \doublespacing
+    - \usepackage{float}
+    - \floatplacement{figure}{t}
+    - \floatplacement{table}{t}
+    - \usepackage{flafter}
+    - \usepackage[section]{placeins}
+---
+
+\newpage
+
+> Question: Estimate the true conditional expecation function of repub_change_1216, given the provided explanatory variables. 
+
+
+### Step 1: Setting up my enviroment, loading the packages I will use / used, and importing the data. Also examining the data to begin thinking about creating the model. 
+
+```{r}
+library(tidyverse)
+library(sandwich)
+library(modelsummary)
+library(ggeffects)
+library(broom)
+library(car)
+library(kableExtra)
+library(estimatr)
+library(lmtest)
+
+load("~/Documents/PS405-Linear-Models/final_problem_set/pres_elec16_data.RData")
+
+#rename the datsa
+
+election <- exam_data 
+
+# view(election)
+# str(election)
+
+```
+
+
+### Step 2: Clustering the data by state. 
+
+Generally, with all the county level data exists, it is probably a good idea to cluster the data by each state. Clustering the county data by each state also helps account of spatial similarities at the intra-state level, and potentially even the national level. In general, clustering will improve our accuracy, but it will also increase our standard errors why is a known byproduct of clustering. 
+
+
+```{r}
+
+#named the new column state_v2 as it is the second itteration of state data in the data set. 
+
+election$state_v2 <- as.factor(factor(election$state))
+
+```
+
+### Step 3: Creation of new variables. 
+
+There is a lot of demographic information within the data set, and after analyzing it for a bit, I think it would be wise to create some new variables that help us analyze our interest which is the change in republican vote share from the 2016 to 2012 elections.
+
+The new variables I am going to create are as a follows:
+- Change in unemployment 
+- Change in median income 
+- Change in poverty rate
+- total non-white VAP 
+
+The three new variables pertaining to change, are to tease out if economic standing had anything to do with the change in who people might vote for. The total non-white VAP is to make it easier to examine if having a larger amount of non-white VAP's is associated with a change. This new variable does raise some concern however as Hispanics have increasingly voted for republicans at a much higher rate than blacks, who they will be grouped with in this new variable. 
+
+For all these new variables, I am doing $2016 value - 2012 value$, to get the difference. For this, a positive result would mean an increase in for example median income from 2012 to 2016, and a negative result would mean a decrease.
+
+The result in the dataframe below show a slight increase in median income, which is $2,270, and decreases in the poverty rate, and unemployment rate. 
+
+
+```{r}
+
+# doing the math 
+
+election$unempl_diff <- election$unempl_rate15 - election$unempl_rate12
+election$median_diff <- election$median_income16 - election$median_income12
+election$Pov_diff <- election$poverty16 - election$poverty12
+
+
+# view(election)
+
+#storing the values to examine 
+
+mean_un <- mean(election$unempl_diff)
+mean_median <- mean(election$median_diff)
+mean_pov <- mean(election$Pov_diff)
+
+#making a df to easily examine 
+
+means <- data.frame(mean_un, mean_median, mean_pov)
+
+#print(means)
+
+## now going to create the nonwhite variable 
+
+election$total_nonwhite_vap <- election$black_vap + election$asian_vap + election$asian_vap
+
+
+```
+
+### Step 5: Making models
+
+Now that I have some new variables created, I am going to start making some models. As someone who's research interests generally fall in the lines of urban politics, race, class and  political economy, I am going to focus on indicators related to those areas first. I will bring more stuff in and or make changes if those do not net any results. 
+
+For my first models, I am going to just put all of our new variables in, and see what we get. 
+
+```{r}
+
+#basic lm/ols model to start, without clusters. 
+
+basic_model <- lm(repub_change1216 ~ unempl_diff + median_diff + Pov_diff + total_nonwhite_vap, data = election)
+
+# next making a model with the clusters
+
+model_clustered <- lm_robust(repub_change1216 ~ unempl_diff + median_diff + Pov_diff + total_nonwhite_vap, data = election, clusters = state_v2)
+
+# Now let's compare 
+
+#modelsummary(list("Basic" = basic_model, "Clustered" = model_clustered),
+#gof_omit = "AIC|BIC|Log.Lik",
+#title = "Comparing Models",
+#stars = TRUE,
+#digits = 5)
+
+
+
+```
+
+
+
+### Step 6: Improving the models 
+
+The models created do not explain that much. So the the next step may be to remove or add or interact variables.
+
+```{r}
+
+# going to interact the variables first to see that gives us anything. Just redoing the same models but wiht * to interact. 
+
+basic_model_interactions <- lm(repub_change1216 ~ unempl_diff * median_diff * Pov_diff * total_nonwhite_vap, data = election)
+
+model_clustered_interactions <- lm_robust(repub_change1216 ~ unempl_diff * median_diff * Pov_diff * total_nonwhite_vap, 
+                             data = election, 
+                             clusters = election$state_v2)
+
+both <- list("Basic" = basic_model_interactions, "Clustered" = model_clustered_interactions)
+
+#modelsummary(basic_model_interactions, stars = TRUE)
+
+#summary(model_clustered_interactions)
+
+# again the models pretty much explain nothing. 
+
+
+```
+
+Interacting did not do anything. 
+
+Now let's bring urban population percentage into the mix. 
+
+
+```{r}
+
+basic_model_urban <- lm(repub_change1216 ~ unempl_diff + pct_urban + median_diff + Pov_diff + total_nonwhite_vap, data = election)
+
+# next making a model with the clusters
+
+model_clustered_urban <- lm_robust(repub_change1216 ~ unempl_diff + pct_urban + median_diff + Pov_diff + total_nonwhite_vap, data = election, clusters = state_v2)
+
+# Now let's compare 
+
+#modelsummary(list("Basic" = basic_model_urban, "Clustered" = model_clustered_urban),
+#gof_omit = "AIC|BIC|Log.Lik",
+#title = "Comparing Models",
+#stars = TRUE,
+#digits = 5)
+
+```
+
+This begins to get us somewhere. The added coefficient of percentage of population that is in an urban center, higlights that every 1 percent increase in the urban population within a county changes the amount of votes casted for the Republican presidential candidate by a decrease of 0.077. So Donald Trump made successful inroads with rural voters. 
+
+I also want to explore college educated voters, and their relationship to the change in republican vote share. 
+
+```{r}
+
+basic_model_college <- lm(repub_change1216 ~ unempl_diff + pct_urban + prop_noncollege + median_diff + Pov_diff + total_nonwhite_vap, data = election)
+
+# next making a model with the clusters
+
+model_clustered_college <- lm_robust(repub_change1216 ~ unempl_diff + pct_urban + prop_noncollege + median_diff + Pov_diff + total_nonwhite_vap, data = election, clusters = state_v2)
+
+# Now let's compare 
+
+#modelsummary(list("Basic" = basic_model_college, "Clustered" = model_clustered_college),
+#gof_omit = "AIC|BIC|Log.Lik",
+#title = "Comparing Models",
+#stars = TRUE,
+#digits = 5)
+
+```
+
+The results were pretty significant. The increase of non-college graduates in a county, and in a state, drastically increase the change in republican vote shares. The next demographic area I am going to check, and explore is occupation.
+
+```{r}
+
+basic_model_occupation <- lm(repub_change1216 ~ unempl_diff + pct_urban + prop_manufacturing + prop_agr + prop_constr + prop_noncollege + median_diff + Pov_diff + total_nonwhite_vap, data = election)
+
+# next making a model with the clusters
+
+model_clustered_occupation <- lm_robust(repub_change1216 ~ unempl_diff + prop_manufacturing + prop_agr + prop_constr + pct_urban + prop_noncollege + median_diff + Pov_diff + total_nonwhite_vap, data = election, clusters = state_v2)
+
+# Now let's compare 
+
+#modelsummary(list("Basic" = basic_model_occupation, "Clustered" = model_clustered_occupation),
+#gof_omit = "AIC|BIC|Log.Lik",
+#title = "Comparing Models",
+#stars = TRUE,
+#digits = 5)
+
+```
+
+Again, we get some change. Trump made big gains with manufacturing industring, but also made big losses in agrictulure and construction. 
+
+Let's re-run the latest models but with just blacks, instead of all nonwhites.
+
+```{r}
+basic_model_occupation <- lm(repub_change1216 ~ unempl_diff + pct_urban + prop_manufacturing + prop_agr + prop_constr + prop_noncollege + median_diff + Pov_diff + black_vap, data = election)
+
+# next making a model with the clusters
+
+model_clustered_occupation <- lm_robust(repub_change1216 ~ unempl_diff + prop_manufacturing + prop_agr + prop_constr + pct_urban + prop_noncollege + median_diff + Pov_diff + black_vap, data = election, clusters = state_v2)
+
+# Now let's compare 
+
+#modelsummary(list("Basic" = basic_model_occupation, "Clustered" = model_clustered_occupation),
+#gof_omit = "AIC|BIC|Log.Lik",
+#title = "Comparing Models",
+#stars = TRUE,
+#digits = 5)
+
+```
+
+Nothing really changes. 
+
+### Step 7: Piecing some stuff together. 
+
+So we know from our myriad of models so far that our new variables of difference in median income generally has not been helpful in any model, the same with total_nonwhite_vap. The difference in poverty rate has varied, but has somewhat explanatory in our models. However, throughout all of our models, the most salient variables have been the ones pertaining to education, industry, unemployment, and urban population.
+
+Therefore, let's make a _focused_ model with those varibales.
+
+```{r}
+
+improved_model <- lm(repub_change1216 ~ unempl_diff + prop_manufacturing + prop_agr + prop_constr + pct_urban + prop_noncollege + Pov_diff, data = election)
+
+# next making a model with the clusters
+
+improved_model_clustered <- lm_robust(repub_change1216 ~ unempl_diff + prop_manufacturing + prop_agr + prop_constr + pct_urban + prop_noncollege + Pov_diff, data = election, clusters = state_v2)
+
+# Now let's compare 
+
+#modelsummary(list("Basic" = improved_model, "Clustered" = improved_model_clustered),
+#gof_omit = "AIC|BIC|Log.Lik",
+#title = "Comparing Models",
+#stars = TRUE,
+#digits = 5)
+
+```
+
+### Step 8: Analyizing our model
+
+For now, these models are what we want to go forward with.
+
+Let's analyze them to make sure they uphold with our OLS assumptions.
+
+
+Checking distribution
+
+```{r}
+
+plot(improved_model)
+
+studentized_residuals <- rstudent(improved_model)
+qqPlot(studentized_residuals)
+
+```
+QQ plot results for the regular model is normally distributed to a point, but the lower tail has some serious outliers and is pretty extreme. This impacts some of the validity of our model. Our model is skewed negatively to the left, in statistical terms. 
+
+Let's check for homoskedasticity. 
+
+```{r}
+
+bptest(improved_model)
+
+bptest(improved_model_clustered) 
+
+```
+ 
+ The models prove to be homoskedasticity, so because of this, and the size of our data, which is over 3,000 observations, the skewed tail of our QQ plot is less of a concern. 
+ 
+### Step 8 Addressing QQ plot, non-normal residuals concern. 
+
+Even with the concern not being as high, I want to see see if there is something we can do to get a normal distribution. 
+
+First, let's log the percent of people living in an urban center. 
+ 
+ 
+```{r}
+election$log_pct_urban <- log1p(election$pct_urban / 100)  # transforming the variable, I am using log1p because I was struggling to get it to work, and kept getting a lot -inf variables, so I asked ChatGPT and this is what it told me to do. 
+
+```
+
+Nothing really change. While my model did pass the Breusch-Pagan test, I will still use HC3 for one of the models, just to be _safe_ regarding my results, since my qqplot show some concerns. 
+
+```{r}
+
+
+coeftest(improved_model, vcov = vcovHC(improved_model, type = "HC3"))
+
+
+```
+
+### Step 9: Influential Points
+
+The last thing I want to check to maybe correct the model, is to examine influential points. 
+
+
+```{r}
+# checking influential points
+
+plot(cooks.distance(improved_model), type = "h", main = "Cook's Distance")
+abline(h = 4/nrow(election), col = "red", lty = 2)
+
+
+#influence plot to look at cooks distance
+
+influencePlot(improved_model)
+
+
+# I asked ChatGPT how to get what points were influential in a specific dataframe, and get the means. I was curious about getting more data from the influential points but was not sure / struggling with the code set up for it. 
+
+influential_points <- which(cooks.distance(improved_model) > (4/nrow(election)))
+
+#election[influential_points, ] %>%
+  #summarise(
+    #mean_median_income16 = mean(median_income16, na.rm = TRUE),
+   # mean_median_income12 = mean(median_income12, na.rm = TRUE),
+   # mean_poverty_2012 = mean(poverty12, na.rm = TRUE),
+   # mean_poverty_2016 = mean(poverty16, na.rm = TRUE)
+  #
+
+
+```
+
+Okay, so this is sort of telling. The mean median income changes, but the poverty does not. What I am observing for this is that it may have been wrong to create variables that looked at the difference in poverty, and income or even unemployment. The reason for this is places that already had high poverty, that remained with high poverty, may have changed their vote. They could be unhappy with that fact the party they voted for last time, did not improve their material circumstance. This is not something that the rate of change would showcase. 
+
+### Step 10: Recreating models, with not new variables created.
+
+I am just going to now create two new models, with all the variables are of interest, but not combine any or make any new ones. 
+
+```{r}
+
+refreshed_model <- lm(repub_change1216 ~ poverty12 + poverty16 + unempl_rate12 + unempl_rate15 + median_income12 + median_income16 + pct_urban + prop_noncollege + black_vap, data = election)
+
+refreshed_model_clustered <- lm_robust(repub_change1216 ~ poverty12 + poverty16 + unempl_rate12 + unempl_rate15 + median_income12 + median_income16 + pct_urban + prop_noncollege + black_vap, data = election, clusters = state_v2)
+
+
+#modelsummary(list("Refreshed Basic" = refreshed_model, "Refreshed Clustered" = #refreshed_model_clustered),
+#gof_omit = "AIC|BIC|Log.Lik",
+#title = "Comparing Models",
+#stars = TRUE,
+#digits = 5)
+
+
+```
+
+
+I will come back to the results in a bit but let's check if things are more "normal".
+
+
+```{r}
+
+qqPlot(refreshed_model)
+
+bptest(refreshed_model)
+
+
+
+```
+The qqPlot hardly changes, but now the model fails the homoskedastic check. 
+
+
+Using each unique year would violate the multi-collinearity OLS assumption, but the results do not really improve anything either. So this test was somewhat irrelevant, but it was worth checking. 
+
+### Step 10: Models with seperate years
+
+The last way we can examine the relationship(s) with the change or lack of in poverty rates, median income, and unemployment, is by examining them all individually. 
+
+
+
+```{r}
+
+# model for 2012 
+
+refreshed_model_2012 <- lm(repub_change1216 ~ poverty12 + unempl_rate12 + median_income12 + pct_urban + prop_noncollege + black_vap, data = election)
+
+refreshed_model_clustered_2012 <- lm_robust(repub_change1216 ~ poverty12 + unempl_rate12 + median_income12 + pct_urban + prop_noncollege + black_vap, data = election, clusters = state_v2)
+
+#models for 2016
+
+refreshed_model_2016 <- lm(repub_change1216 ~ poverty16 + unempl_rate15 + median_income16 + pct_urban + prop_noncollege + black_vap, data = election)
+
+refreshed_model_clustered_2016 <- lm_robust(repub_change1216 ~ poverty16 + unempl_rate15 + median_income16 + pct_urban + prop_noncollege + black_vap, data = election, clusters = state_v2)
+
+
+#modelsummary(list("Refreshed Basic 2012 " = refreshed_model, "Refreshed Clustered 2016 " = refreshed_model_clustered, "Refreshed Basic 2016" = refreshed_model_2012, "Refreshed Clustered 2016" = refreshed_model_2016),
+#gof_omit = "AIC|BIC|Log.Lik",
+#title = "Comparing Models",
+#stars = TRUE,
+#digits = 5)
+
+# going to leave results for now
+
+```
+
+
+
+Now testing assumptions 
+
+```{r}
+qqPlot(refreshed_model_2012)
+qqPlot(refreshed_model_2016)
+
+bptest(refreshed_model_2012)
+bptest(refreshed_model_2016)
+```
+
+Again, not much has changed.
+
+### Step 11: Rounding up what has been learned and observed, and some new variables.
+
+
+This section is dedicated to working through putting together all the things I would like to present, and showcase in the "final write up". 
+
+The first thing I would like to go over, and discuss is the utility of my created variables. Those being "pov_diff", which speaks to the difference in poverty rate btween 2016 and 2012, and "median_diff" as well as "unempl_diff" which also look at the difference in that same temporal period. While these are useful as potential descriptors, they cause mutlicollinearity issues.  The reason this OLS assumption is violated is because the two poverty rates are highly correlated with each other, and the same is true for median income and unemployment rate. 
+
+```{r}
+cor(election$poverty12, election$poverty16)
+cor(election$median_income16, election$median_income12)
+cor(election$unempl_rate15, election$unempl_rate12)
+
+```
+
+
+It is a point of interest to potentially measure how change might have affected the republican vote share, but that is probably for a separate model, or could be fixed with further attempts to log variables, or even use a polynomial model. Generally however, the models with my new created variables is extreme on the left side, and is negatively skewed because its skew is to the left. 
+The last variable I want to explore is a state-based variable, to tease out some of the results from one of the previous models. When we looked at industry, proportion of manufacturing workers was salient. Because of this, and knowing that Trump made in-roads with non-urban voters from other models as well, I am going to create a rust belt variable. 
+
+
+```{r}
+# defining these states the rust belt 
+rust_belt_states <- c("Ohio", "Michigan", "Pennsylvania", "Kentucly", "West Virginia", "Wisconsin", "Indiana", "Illinois", "New York")
+
+# New York is a questionable rust belt state, but I will leave it in for now. 
+
+election$rust_belt <- ifelse(election$state %in% rust_belt_states, 1, 0)
+
+rust_belt_model <- lm(repub_change1216 ~ poverty16 + unempl_rate15 + median_income16 + pct_urban + prop_noncollege + rust_belt, data = election)
+
+modelsummary(rust_belt_model, stars = TRUE)
+
+
+
+
+```
+
+So the results of the rust belt variable are statistically significant. Let's make a model with the 2012 economic indicators, manufacturing, and rust belt. 
+
+```{r}
+
+holisitc_model <- lm(repub_change1216 ~ rust_belt + prop_manufacturing + pct_urban + poverty16 + unempl_rate15 + median_income16 + prop_noncollege, data = election)
+
+modelsummary(holisitc_model, stars = TRUE)
+
+```
+
+So this model looks good, but unemployment rate does not seem to explain anything, the same with median_income. So let's remove them 
+
+```{r}
+revised_model <- lm(repub_change1216 ~ rust_belt + prop_manufacturing + pct_urban + poverty16 + prop_noncollege, data = election)
+
+modelsummary(revised_model, stars = TRUE)
+```
+
+In this most recent model, all of our results are significant at the .0001 level. Our R^2 also does not change despite removing some variables so this show they did not really explain much, or add much to our model. 
+
+The last thing I want to explore is rural-ness a bit deeper. So I am going to make a variable for count with a sub 50% urban percentage.  
+
+```{r}
+
+# variable creation
+
+election$rural <- ifelse(election$pct_urban < 50, 1, 0)
+
+```
+
+```{r}
+#creating new model
+
+#rural_model <- lm(repub_change1216 ~ rust_belt + prop_manufacturing + pct_urban + poverty16 + prop_noncollege + rural, data = election)
+
+#modelsummary(rural_model, stars = TRUE)
+
+```
+`
+
+    
+    
+### Step 12: Putting together final materials 
+
+Based on all we have uncovered, we want to check some assumptions of our final models 
+
+Our final models are going to be as follows, and why:
+
+Model 1: repub_change126, prop_noncollege, pct_urban, prop_manufacturing, rust_belt, poverty16,
+
+```{r}
+
+# at this point I explored using poverty12 because that would make more sense theoretically, because the recent poverty rate might not take effect in the most recent election. But the results are almost the same. 
+
+
+final_rust_belt <- lm(repub_change1216 ~ poverty16 + prop_noncollege + prop_manufacturing + rust_belt + pct_urban, data = election)
+
+modelsummary(final_rust_belt)
+
+```
+
+
+Why?: This model contains the most salient results, with the most explanatory power. As all these results were statistically significant. 
+
+Our model is heteroskedastic however, as scene below, so we will use HC3 standard errors. Also known as robust standard errors. 
+
+```{r}
+qqPlot(revised_model)
+bptest(revised_model)
+```
+
+
+
+```{r}
+
+# using hc3
+
+final_rust_belt_hc3 <- lm_robust(repub_change1216 ~ poverty16 + rust_belt + pct_urban + prop_manufacturing + prop_noncollege , 
+                                 data = election, se_type = "HC3")
+
+
+
+modelsummary(final_rust_belt_hc3, stars = TRUE)
+
+```
+
+
+While this model may violate the multicollinearity assumption with how its variables are created, our original "imrpoved" model passed the BP test. So it is also of use. This can be seen below, and the model. 
+
+
+```{r}
+improved_model <- lm(repub_change1216 ~ unempl_diff + prop_manufacturing + prop_agr + prop_constr + pct_urban + prop_noncollege + Pov_diff, data = election)
+
+bptest(improved_model)
+```
+Then lastly, we have our clustered model, of what is our best model, without the rust-belt variable as this would create issues with our state based cluster.
+
+```{r}
+
+final_cluster <- lm_robust(repub_change1216 ~ unempl_diff + prop_manufacturing + prop_agr + prop_constr + pct_urban + prop_noncollege + Pov_diff, clusters = state_v2, data = election)
+
+modelsummary(final_cluster, stars =  TRUE)
+
+# for the final presenation we should prob present this model unclustered just for references.
+
+
+final_uncluster <- lm_robust(repub_change1216 ~ unempl_diff + prop_manufacturing + prop_agr + prop_constr + pct_urban + prop_noncollege + Pov_diff, data = election)
+
+
+modelsummary(final_uncluster, stars = TRUE)
+
+
+
+```
+
+
+Final Model Summary Table to compare is:
+
+```{r}
+
+coef_names <- c(
+  "(Intercept)" = "Intercept", 
+  "poverty16" = "Poverty Rate 2016",
+  "unempl_rate15" = "Unemployment Rate 2015",
+  "median_income16" = "Median Income 2016",
+  "pct_urban" = "Urban Pop. Percentage",
+  "prop_noncollege" = "Proportion Non-College",
+  "rust_belt" = "Rust Belt States",
+  "prop_agr" = "Proportion Agricultural Workers",
+  "prop_manufacturing" = "Proportion Manufacturing Workers",
+  "prop_constr" = "Proportion Construction Workers",
+  "unempl_dff" = "Difference in 2015 and 2012 Unemployment Rate",
+  "Pov_diff" = "Difference in Povery Rate in 2016 and 2012"
+)
+
+
+
+# Create a modelsummary table comparing all models
+
+modelsummary(
+  list(
+    "HC3 Robust" = final_rust_belt_hc3,
+    "Unclustered" = final_uncluster,
+    "Clustered" = final_cluster,
+    "Improved Model" = improved_model,
+    "Rust Belt" = final_rust_belt
+  ),
+  stars = TRUE,
+  coef_map = coef_names
+)
+
+
+
+```
+
+    
+I think ultimately our HC3 model is the best. It has the highest $R^2$, and it also corrects for our hetero/normality issues. It also has the highest confidence for our coefficients, and best highlights the urban-rural, and manufacturing divides in American Politics. 
+
+```{r, results='asis'}
+
+#finalizing sutff
+
+
+final <- modelsummary(
+  final_rust_belt_hc3,
+  stars = TRUE,          
+  coef_map = coef_names, 
+  title = "Table 1: HC3 Robust Regression Results",
+)
+
+df <- tidy(final_rust_belt_hc3, conf.int = TRUE)
+
+df <- df[df$term != "(Intercept)", ]
+
+final_plot <- ggplot(df, aes(x = estimate, y = reorder(term, estimate))) +
+  geom_point(color = "blue", size = 3) +  # Point for estimate
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2, color = "black") + 
+  labs(
+    title = "Figure 1: Plot for Final Robust Model",
+    x = "Estimate",
+    y = "Variables"
+  ) +
+  theme_minimal()
+```
+
+
+I just realized at this point I examined the influential points earlier in the project, but never explored removed them. So I am going to do that now for what was my "final" model I was going to present.
+
+
+```{r}
+
+
+influential_points <- which(cooks.distance(final_rust_belt) > (4/nrow(election)))
+
+
+election_no_influential <- election[-influential_points, ]
+
+
+no_inf <- lm(repub_change1216 ~ poverty16 + rust_belt + prop_manufacturing + pct_urban + prop_noncollege, data = election_no_influential)
+
+
+qqPlot(no_inf)
+bptest(no_inf)
+# modelsummary(no_inf)
+```
+
+
+```{r}
+influence <- cooks.distance(final_rust_belt)
+
+threshold <- 4 / nrow(election)
+influential_points <- which(influence > threshold)
+
+influential_df <- election[influential_points, ]
+
+# head(influential_df)
+
+
+
+```
+
+The influence points that were removed, we places that were heavy in poverty I think. Removing those, we now have a normalized qqPlot, or distribution. 
+
+```{r}
+modelsummary(
+  list("No Influential Points" = no_inf, 
+       "Original Model" = final_rust_belt, "HC3" = final_rust_belt_hc3),
+  gof_map = c("r.squared", "adj.r.squared", "AIC", "BIC", "RMSE"), stars = TRUE
+)
+
+```
+
+Okay, so the influence points do not change the results really at all besides making our $R^2$ higher. 
+
+### Final Write Up
+
+This project attempted to uncover an answer to the question what caused the change in republican vote share in the 2016, and 2012 elections. There are a lot of ways to engage with this question contextually, and theoretically. The theoretical foundations for the models, and the final model for this project, beyond the statistical skills learned in the course, are taken from existing American Politics research [@fiorina_unstable_2017; @sides_identity_2019; @hacker_bridging_2024; @tesler_post-racial_2016; @hacker_after_2014; @brown_sequential_2024]. However, this project avoided an overly in-depth analysis with them to stay within the confines of the assignment, and focus specifically on the statistical modeling part of the problem set. 
+
+
+```{r}
+
+final
+
+```
+
+
+The final model this project puts forth can be seen above. This model using the variables urban population percentage, if the state is part of the rust belt or not, the 2016 poverty rate, the proportion of manufacturing workers as well as the  proportion of non college graduates. Since the model struggles to satisfy the assumptions of homoskedasciticty, and normally distributed residuals, this is attempted to be corrected by using robust standard errors. These variables were chosen because throughout the construction of numerous models, they were routinely the most salient. They also theoretically make sense when employing the knowledge we know about American politics, from previously mentioned literature. 
+
+
+The results of this model indicate key factors in the change of the republican share. Our poverty rate coefficient has a small relationship with our intercept, but this relationship is statistically significant. This relationship proves to be somewhat important, and having a larger sample size like we do likely helps confirm this. Another salient indicator, although not a tremendously large relationship, is that of the urban population percentage. When holding other variables constant, for each 1 percentage point increase in urban population, the change in Republican vote share decreases by 0.043 percentage points. The size of the effects, and their confidence intervals can be seen below. 
+
+```{r}
+
+final_plot
+
+```
+
+The coefficients that were most salient, which we can see in our model table as well as our plot that showcases the estimate and the confidence intervals, are rust belt states, proportion of workers in manufacturing and proportion of non-college graduates. The proportion of non-college-educated voters has a large and positive effect. This means that counties with a higher share of non-college-educated voters saw significantly greater increases in the Republican vote share. While not as large of a relationship, the states within our rust belt variable, also have a strong, positive and statistically significant result. The same goes for areas with a high percentage of manufacturing workers, which also overlaps with rust belt states. A one percentage point increase in manufacturing workers related to a 7.682 increase in Republican vote share change from 2012 to 2016. This result was also statistically significant. These results highlight the electoral shifts made in the 2016 election, and the areas Trump had success in. 
+
+
+While our final model violates some OLS assumptions, as stated already, these were attempted to be corrected using robust standard errors. As demonstrated throughout the project as well, solutions were tried such as logging and transforming variables, and using diagnostic tools. The project also attempted to remove any influence points, and when doing this did this did produce a more _normal_ distribution, however the final model presented is the model with the influence points. The reason for this is because the primary conclusions remain the same, so removing the data seemed unnecessary. The additional models without the influence points however would likely be in the appendix if this was a full article. Interactions were also explored in this project, but did not result in anything novel. Also, some of the models developed were more successful than others, and again, they would be in the final paper, or appendix were this a manuscript for an article. However, the model chosen was felt to have best overall results all things considered. 
+
+In short, I hope I have demonstrated successfully, the analytical research process used to develop a linear regression model, that aims to answer this problem set's question. To do this, I employed tools learned throughout the quarter, such as exploring the transformation of variables, running diagnostics to explore my models, and general coding skills for data presentation and visualization. I also hope that I have been successful in creating a useful model, that helps presents answers to the question itself. Ultimately, after all of this, this project finds that Trump made in-roads with citizens who were not college degree holders in the rust belt, more than anything else. And the nature of American federalism winning these unique area, was worth more than making national in-roads, which is why he won the election but lost the popular vote. 
+
+
+
+
+### Addendum 
+
+As mentioned periodically in the body, this project employed Large-Language Models, specifically Open AI's ChatGPT at various points in this project. It did so when exploring the utility of log-transforming the variables. As when doing so by myself, I ran into some issues with some of the rows being "-inf", or N/A, which led to models not running. I also asked for some help on how to store the influence points in a data-frame, to get a rough idea what the influence points were. I did this twice. Then a few times I asked questions related to wording, defining terms, or just attempting to get a better understanding of something I was trying to talk about, or use. I also had a lot of troubling render this project, so I had to use ChatGPT to debug some LaTeX and quarto issues. Overall, ChatGPT was helpful, but generally, I only find it helpful if I have pre-existing context, or know exactly what I am looking for it. If I am troubleshooting something completely blind, or have no context, it does not really seem to be all that helpful. If not, more of a burden. 
+
+# References
+
+
+
+
+
+
+
+
+
+
+
+
